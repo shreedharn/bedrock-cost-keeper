@@ -1,0 +1,415 @@
+"""DynamoDB implementation of the database bridge."""
+
+import time
+from typing import Optional, Dict, Any, List
+import aioboto3
+from botocore.exceptions import ClientError
+
+from .bridge import DatabaseBridge
+from ...core.config import settings
+
+
+class DynamoDBBridge(DatabaseBridge):
+    """DynamoDB implementation of database operations."""
+
+    def __init__(self):
+        """Initialize DynamoDB bridge."""
+        self.session = aioboto3.Session()
+        self._dynamodb = None
+
+    async def _get_dynamodb(self):
+        """Get DynamoDB resource (lazy initialization)."""
+        if self._dynamodb is None:
+            self._dynamodb = await self.session.resource(
+                'dynamodb',
+                region_name=settings.aws_region,
+                aws_access_key_id=settings.aws_access_key_id,
+                aws_secret_access_key=settings.aws_secret_access_key
+            ).__aenter__()
+        return self._dynamodb
+
+    # ==================== Config Operations ====================
+
+    async def get_org_config(self, org_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve organization configuration."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_config_table)
+
+        try:
+            response = await table.get_item(
+                Key={'PK': f'ORG#{org_id}', 'SK': ''}
+            )
+            return response.get('Item')
+        except ClientError:
+            return None
+
+    async def get_app_config(self, org_id: str, app_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve application configuration."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_config_table)
+
+        try:
+            response = await table.get_item(
+                Key={'PK': f'ORG#{org_id}', 'SK': f'APP#{app_id}'}
+            )
+            return response.get('Item')
+        except ClientError:
+            return None
+
+    async def put_org_config(self, org_id: str, config: Dict[str, Any]) -> None:
+        """Create or update organization configuration."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_config_table)
+
+        item = {
+            'PK': f'ORG#{org_id}',
+            'SK': '',
+            **config,
+            'updated_at_epoch': int(time.time())
+        }
+
+        await table.put_item(Item=item)
+
+    async def put_app_config(self, org_id: str, app_id: str, config: Dict[str, Any]) -> None:
+        """Create or update application configuration."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_config_table)
+
+        item = {
+            'PK': f'ORG#{org_id}',
+            'SK': f'APP#{app_id}',
+            **config,
+            'updated_at_epoch': int(time.time())
+        }
+
+        await table.put_item(Item=item)
+
+    # ==================== Sticky State Operations ====================
+
+    async def get_sticky_state(self, scope: str, day: str) -> Optional[Dict[str, Any]]:
+        """Get sticky fallback state for a scope and day."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_sticky_state_table)
+
+        try:
+            response = await table.get_item(
+                Key={'PK': scope, 'SK': day}
+            )
+            return response.get('Item')
+        except ClientError:
+            return None
+
+    async def put_sticky_state(
+        self,
+        scope: str,
+        day: str,
+        active_model_label: str,
+        active_model_index: int,
+        reason: str,
+        previous_model_label: Optional[str] = None
+    ) -> bool:
+        """Set sticky fallback state with conditional write."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_sticky_state_table)
+
+        now = int(time.time())
+        item = {
+            'PK': scope,
+            'SK': day,
+            'active_model_label': active_model_label,
+            'active_model_index': active_model_index,
+            'reason': reason,
+            'activated_at_epoch': now
+        }
+
+        if previous_model_label:
+            item['previous_model_label'] = previous_model_label
+
+        try:
+            # Conditional write: only advance to higher index
+            await table.put_item(
+                Item=item,
+                ConditionExpression='attribute_not_exists(active_model_label) OR active_model_index < :new_index',
+                ExpressionAttributeValues={':new_index': active_model_index}
+            )
+            return True
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+                return False
+            raise
+
+    # ==================== Usage Aggregation Operations ====================
+
+    async def update_usage_shard(
+        self,
+        scope: str,
+        day: str,
+        model_label: str,
+        shard_id: int,
+        cost_usd_micros: int,
+        input_tokens: int,
+        output_tokens: int,
+        requests: int,
+        request_id: str
+    ) -> None:
+        """Atomically update usage counters for a shard."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_usage_agg_sharded_table)
+
+        pk = f'{scope}#LABEL#{model_label}#SH#{shard_id}'
+
+        await table.update_item(
+            Key={'PK': pk, 'SK': day},
+            UpdateExpression='ADD cost_usd_micros :c, input_tokens :i, output_tokens :o, requests :r, request_ids :rid SET updated_at_epoch = :t',
+            ExpressionAttributeValues={
+                ':c': cost_usd_micros,
+                ':i': input_tokens,
+                ':o': output_tokens,
+                ':r': requests,
+                ':rid': {request_id},  # Set - DynamoDB will handle duplicates
+                ':t': int(time.time())
+            }
+        )
+
+    async def get_usage_shards(
+        self,
+        scope: str,
+        day: str,
+        model_label: str,
+        shard_count: int
+    ) -> List[Dict[str, Any]]:
+        """Get all usage shards for a scope/day/model."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_usage_agg_sharded_table)
+
+        # Build keys for batch get
+        keys = [
+            {'PK': f'{scope}#LABEL#{model_label}#SH#{i}', 'SK': day}
+            for i in range(shard_count)
+        ]
+
+        response = await dynamodb.batch_get_item(
+            RequestItems={
+                settings.dynamodb_usage_agg_sharded_table: {'Keys': keys}
+            }
+        )
+
+        return response.get('Responses', {}).get(settings.dynamodb_usage_agg_sharded_table, [])
+
+    # ==================== Daily Total Operations ====================
+
+    async def get_daily_total(
+        self,
+        scope: str,
+        day: str,
+        model_label: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get aggregated daily total for a scope/day/model."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_daily_total_table)
+
+        try:
+            response = await table.get_item(
+                Key={'PK': f'{scope}#LABEL#{model_label}', 'SK': day}
+            )
+            return response.get('Item')
+        except ClientError:
+            return None
+
+    async def get_daily_totals_batch(
+        self,
+        scope: str,
+        day: str,
+        model_labels: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Get daily totals for multiple models in one batch."""
+        dynamodb = await self._get_dynamodb()
+
+        # Build keys for batch get
+        keys = [
+            {'PK': f'{scope}#LABEL#{label}', 'SK': day}
+            for label in model_labels
+        ]
+
+        response = await dynamodb.batch_get_item(
+            RequestItems={
+                settings.dynamodb_daily_total_table: {'Keys': keys}
+            }
+        )
+
+        items = response.get('Responses', {}).get(settings.dynamodb_daily_total_table, [])
+
+        # Map items by model label
+        result = {}
+        for item in items:
+            # Extract label from PK
+            pk_parts = item['PK'].split('#LABEL#')
+            if len(pk_parts) == 2:
+                label = pk_parts[1]
+                result[label] = item
+
+        return result
+
+    async def put_daily_total(
+        self,
+        scope: str,
+        day: str,
+        model_label: str,
+        cost_usd_micros: int,
+        input_tokens: int,
+        output_tokens: int,
+        requests: int
+    ) -> None:
+        """Write aggregated daily total (overwrite)."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_daily_total_table)
+
+        item = {
+            'PK': f'{scope}#LABEL#{model_label}',
+            'SK': day,
+            'cost_usd_micros': cost_usd_micros,
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens,
+            'requests': requests,
+            'updated_at_epoch': int(time.time())
+        }
+
+        await table.put_item(Item=item)
+
+    # ==================== Pricing Cache Operations ====================
+
+    async def get_pricing(self, bedrock_model_id: str, date: str) -> Optional[Dict[str, Any]]:
+        """Get pricing for a model on a specific date."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_pricing_cache_table)
+
+        try:
+            response = await table.get_item(
+                Key={'PK': bedrock_model_id, 'SK': date}
+            )
+            return response.get('Item')
+        except ClientError:
+            return None
+
+    async def put_pricing(
+        self,
+        bedrock_model_id: str,
+        date: str,
+        pricing_data: Dict[str, Any]
+    ) -> None:
+        """Store pricing data for a model."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_pricing_cache_table)
+
+        item = {
+            'PK': bedrock_model_id,
+            'SK': date,
+            **pricing_data,
+            'fetched_at_epoch': int(time.time())
+        }
+
+        await table.put_item(Item=item)
+
+    # ==================== Token Revocation Operations ====================
+
+    async def is_token_revoked(self, token_jti: str) -> bool:
+        """Check if a token has been revoked."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_revoked_tokens_table)
+
+        try:
+            response = await table.get_item(
+                Key={'PK': token_jti}
+            )
+            return 'Item' in response
+        except ClientError:
+            return False
+
+    async def revoke_token(
+        self,
+        token_jti: str,
+        token_type: str,
+        client_id: str,
+        original_expiry_epoch: int
+    ) -> None:
+        """Revoke a token."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_revoked_tokens_table)
+
+        item = {
+            'PK': token_jti,
+            'token_type': token_type,
+            'client_id': client_id,
+            'revoked_at_epoch': int(time.time()),
+            'original_expiry_epoch': original_expiry_epoch,
+            'expires_at_epoch': original_expiry_epoch  # TTL attribute
+        }
+
+        await table.put_item(Item=item)
+
+    # ==================== Secret Retrieval Token Operations ====================
+
+    async def create_secret_retrieval_token(
+        self,
+        token_uuid: str,
+        org_id: str,
+        app_id: Optional[str],
+        secret_type: str,
+        client_id: str,
+        expires_at_epoch: int
+    ) -> None:
+        """Create a one-time secret retrieval token."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_secret_retrieval_tokens_table)
+
+        item = {
+            'PK': token_uuid,
+            'org_id': org_id,
+            'secret_type': secret_type,
+            'client_id': client_id,
+            'created_at_epoch': int(time.time()),
+            'expires_at_epoch': expires_at_epoch,
+            'used': False
+        }
+
+        if app_id:
+            item['app_id'] = app_id
+
+        await table.put_item(Item=item)
+
+    async def use_secret_retrieval_token(self, token_uuid: str) -> Optional[Dict[str, Any]]:
+        """Mark a secret retrieval token as used (first-use-wins)."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_secret_retrieval_tokens_table)
+
+        now = int(time.time())
+
+        try:
+            response = await table.update_item(
+                Key={'PK': token_uuid},
+                UpdateExpression='SET used = :true, used_at_epoch = :now',
+                ConditionExpression='used = :false AND expires_at_epoch > :now',
+                ExpressionAttributeValues={
+                    ':true': True,
+                    ':false': False,
+                    ':now': now
+                },
+                ReturnValues='ALL_NEW'
+            )
+            return response.get('Attributes')
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+                return None
+            raise
+
+    # ==================== Health Check ====================
+
+    async def health_check(self) -> bool:
+        """Check if database connection is healthy."""
+        try:
+            dynamodb = await self._get_dynamodb()
+            # Simple list tables call to verify connection
+            await dynamodb.tables.all()
+            return True
+        except Exception:
+            return False
