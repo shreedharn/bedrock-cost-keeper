@@ -1,0 +1,143 @@
+# Bedrock Price Keeper - Main Configuration
+#
+# This file defines the global system configuration including:
+# - Model label mappings to Bedrock model IDs
+# - Default pricing (fallback when pricing API unavailable)
+# - System-wide defaults
+---
+service:
+  name: bedrock-price-keeper
+  version: 1.0.0
+
+# System-wide default settings
+# Can be overridden in per-org configs
+metering:
+  # Number of shards for distributed usage counters
+  # Higher values support more concurrent writes
+  # Immutable per org once set - choose based on expected peak traffic
+  usage_agg_shard_count: 8
+
+  # Enter tight mode when spend >= this % of quota
+  # In tight mode, clients check model selection more frequently (e.g., every 60s)
+  tight_mode_threshold_pct: 95
+
+  # How often clients should refresh model selection in normal mode (seconds)
+  # Default: 300 seconds (5 minutes) - prevents using quota-exceeded model after low activity
+  refresh_interval_normal_secs: 300
+
+  # How often clients should refresh model selection in tight mode (seconds)
+  # Default: 60 seconds (1 minute) - faster detection of fallback opportunities
+  refresh_interval_tight_secs: 60
+
+  # Enable sticky fallback behavior
+  # When true: once a model quota exceeded, stick to fallback for rest of day
+  # When false: each request independently checks quotas
+  sticky_fallback_enabled: true
+
+  # Default TTL for cost submission records (days)
+  # After this period, historical data auto-deleted by DynamoDB TTL
+  request_ttl_days: 7
+
+# Model label definitions
+# Labels provide abstraction layer between org configs and actual Bedrock models
+# Orgs reference these labels in their model_ordering
+model_labels:
+  premium:
+    bedrock_model_id: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    description: "Claude 3.5 Sonnet v2 - Premium tier, highest performance"
+    tier: premium
+    family: claude-3.5
+    input_price_usd_micros_per_1m: 3000000    # $3.00 per 1M input tokens
+    output_price_usd_micros_per_1m: 15000000  # $15.00 per 1M output tokens
+
+  standard:
+    bedrock_model_id: "anthropic.claude-3-5-haiku-20241022-v1:0"
+    description: "Claude 3.5 Haiku - Standard tier, fast and cost-effective"
+    tier: standard
+    family: claude-3.5
+    input_price_usd_micros_per_1m: 800000     # $0.80 per 1M input tokens
+    output_price_usd_micros_per_1m: 4000000   # $4.00 per 1M output tokens
+
+  economy:
+    bedrock_model_id: "anthropic.claude-3-haiku-20240307-v1:0"
+    description: "Claude 3 Haiku - Economy tier, most cost-effective"
+    tier: economy
+    family: claude-3
+    input_price_usd_micros_per_1m: 250000     # $0.25 per 1M input tokens
+    output_price_usd_micros_per_1m: 1250000   # $1.25 per 1M output tokens
+
+  ultra_premium:
+    bedrock_model_id: "anthropic.claude-3-opus-20240229-v1:0"
+    description: "Claude 3 Opus - Ultra premium, highest capability (Claude 3 series)"
+    tier: ultra_premium
+    family: claude-3
+    input_price_usd_micros_per_1m: 15000000   # $15.00 per 1M input tokens
+    output_price_usd_micros_per_1m: 75000000  # $75.00 per 1M output tokens
+  
+
+# DynamoDB configuration
+dynamodb:
+  # Table names (can be prefixed with environment)
+  tables:
+    config: bedrock-price-keeper-config
+    sticky_state: bedrock-price-keeper-sticky-state
+    usage_agg_sharded: bedrock-price-keeper-usage-agg-sharded
+    daily_total: bedrock-price-keeper-daily-total
+    pricing_cache: bedrock-price-keeper-pricing-cache
+
+# Background process configuration
+background_processes:
+  # Aggregator: Consolidates sharded counters into DailyTotal
+  aggregator:
+    enabled: true
+    interval_secs: 60          # Run every 60 seconds
+    batch_size: 100            # Max scopes to process per run
+
+  # Pricing refresh: Fetches latest Bedrock pricing
+  pricing_refresh:
+    enabled: true
+    retry_on_failure: true
+    max_retries: 3
+
+  # Quota monitor: Tracks quota proximity and mode transitions
+  quota_monitor:
+    enabled: true
+    interval_secs: 30          # Check every 30 seconds
+
+
+# Monitoring and observability
+monitoring:
+  # CloudWatch metrics
+  cloudwatch:
+    enabled: true
+    namespace: BedrockPriceKeeper
+
+  # Custom metrics to publish
+  metrics:
+    - name: ModelSelectionLatency
+      unit: Milliseconds
+    - name: CostSubmissionCount
+      unit: Count
+    - name: QuotaProximity
+      unit: Percent
+    - name: StickyFlipCount
+      unit: Count
+    - name: AggregatorLag
+      unit: Seconds
+
+
+
+
+# Organization defaults
+# Used when creating new orgs if not specified
+org_defaults:
+  timezone: America/New_York
+  quota_scope: APP # Always use APP scope unless apps are small in number
+  model_ordering:
+    - premium     # Claude 3.5 Sonnet v2 (most capable current model)
+    - standard    # Claude 3.5 Haiku (fast and economical)
+    - economy     # Claude 3 Haiku (most economical)
+  quotas:
+    premium: 10000000         # $10/day (Claude 3.5 Sonnet v2)
+    standard: 5000000         # $5/day (Claude 3.5 Haiku)
+    economy: 2000000          # $2/day (Claude 3 Haiku)

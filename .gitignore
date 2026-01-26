@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+
+# Virtual Environments
+.venv
+
+# Distribution / Packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+
+
+# FastAPI / Uvicorn
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# IDEs
+.vscode/
+.settings/
+
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+
+
+# AWS
+.aws-sam/
+
+# Temporary files
+*.tmp
+.cache/
+tmp/
+temp/
+
+
+# Security / Secrets
+secrets.yaml
+secrets.json
+credentials.json
+*.pem
+*.key
+*.cert
+*.crt

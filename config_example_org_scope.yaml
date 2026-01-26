@@ -1,0 +1,99 @@
+# Example Organization Configuration - Org-Level Quota Scoping
+#
+# This example shows an organization using ORG-level quotas where all
+# applications share a single quota pool.
+#
+# Use case: Small organizations or startups that want simplified quota
+# management across all their applications.
+
+---
+
+org:
+  org_id: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+  org_name: "startup_inc"
+  timezone: "America/Los_Angeles"
+
+  # ORG scope: All apps share these quotas
+  quota_scope: "ORG"
+
+  # Default model ordering for all apps
+  model_ordering:
+    - standard     # Claude 3.5 Haiku (good balance for startup)
+    - economy      # Claude 3 Haiku (fallback)
+
+  # Organization-wide daily quotas
+  # All apps combined cannot exceed these limits
+  quotas:
+    standard: 1000000    # $1.00 per day total across all apps
+    economy: 500000      # $0.50 per day total across all apps
+
+  overrides:
+    tight_mode_threshold_pct: 95
+    agg_shard_count: 8
+    sticky_fallback_enabled: true
+    refresh_interval_secs: 60
+
+# Apps can still override model ordering even with org-level quotas
+apps:
+  # Customer-facing API uses premium when available
+  - app_id: "app-customer-api"
+    app_name: "Customer API"
+
+    # Different model preference for customer-facing work
+    model_ordering:
+      - premium      # Try premium first (shares org quota)
+      - standard     # Fall back to standard
+      - economy      # Final fallback
+
+    # Note: No app-specific quotas since quota_scope: "ORG"
+    # This app shares the org-wide quotas defined above
+
+    overrides:
+      tight_mode_threshold_pct: 90    # More conservative for customer-facing
+
+  # Internal batch processing
+  - app_id: "app-batch-processor"
+    app_name: "Batch Processor"
+
+    # Economy-first for batch work (shares same org quota)
+    model_ordering:
+      - economy      # Cheap for batch
+      - standard     # If economy exhausted
+
+    overrides:
+      tight_mode_threshold_pct: 98    # Batch can tolerate delays
+
+  # Development environment
+  - app_id: "app-dev"
+    app_name: "Development"
+
+    model_ordering:
+      - economy      # Dev only uses economy
+
+# Important notes for ORG-level scoping:
+#
+# 1. All apps combined share the org quotas
+#    - If app-customer-api uses $0.80 of premium quota,
+#      only $0.20 remains for all other apps
+#
+# 2. Apps can have different model_ordering preferences
+#    - Customer API prefers premium
+#    - Batch prefers economy
+#    - But they all pull from same quota pool
+#
+# 3. App-specific quota values are ignored
+#    - Only org.quotas applies
+#
+# 4. Sticky fallback applies org-wide
+#    - When org premium quota exceeded, ALL apps fall back to standard
+#    - Regardless of which app triggered the threshold
+#
+# 5. Benefits:
+#    - Simpler management (one set of quotas)
+#    - Automatic load balancing across apps
+#    - Lower overall spend (no per-app overhead)
+#
+# 6. Tradeoffs:
+#    - One high-traffic app can exhaust quota for others
+#    - Less isolation between applications
+#    - Harder to attribute costs per application

@@ -1,0 +1,197 @@
+# Example Organization Configuration - App-Level Quota Scoping
+#
+# This example shows an organization using APP-level quotas where each
+# application has independent quota pools.
+#
+# Use case: Organizations that want cost attribution and isolation per
+# application/service. Each app has its own daily budget.
+
+---
+
+org:
+  org_id: "550e8400-e29b-41d4-a716-446655440000"
+  org_name: "sample_corp"
+  timezone: "America/New_York"
+
+  # APP scope: Each app has independent quotas
+  # This provides:
+  # - Cost isolation: One app can't exhaust another app's quota
+  # - Attribution: Clear cost tracking per application
+  # - Flexibility: Different budgets per app priority
+  quota_scope: "APP"
+
+  # Default model ordering (used by apps that don't override)
+  model_ordering:
+    - premium      # Claude Opus
+    - standard     # Claude 3.5 Sonnet
+    - economy      # Claude 3 Haiku
+
+  # Default quotas (used by apps that don't specify their own)
+  quotas:
+    premium: 5000000      # $5.00 per day
+    standard: 3000000     # $3.00 per day
+    economy: 1000000      # $1.00 per day
+
+  overrides:
+    tight_mode_threshold_pct: 95
+    agg_shard_count: 8
+    sticky_fallback_enabled: true
+    refresh_interval_secs: 60
+
+# Application-specific configurations
+# Each app has its own independent daily quotas
+apps:
+  # Production customer-facing API - Highest priority
+  - app_id: "app-customer-api"
+    app_name: "Customer API"
+
+    # Premium-first for customer experience
+    model_ordering:
+      - premium      # Start with Opus for best quality
+      - standard     # Fall back to Sonnet
+      - economy      # Last resort
+
+    # Independent daily quotas for this app
+    # These are separate from other apps' quotas
+    quotas:
+      premium: 50000000     # $50.00 per day for this app
+      standard: 25000000    # $25.00 per day
+      economy: 10000000     # $10.00 per day
+
+    overrides:
+      # Enter tight mode early to protect budget
+      tight_mode_threshold_pct: 90
+
+  # Internal admin dashboard - Medium priority
+  - app_id: "app-admin-dashboard"
+    app_name: "Admin Dashboard"
+
+    # Standard tier is sufficient for internal tools
+    model_ordering:
+      - standard     # Sonnet for admin work
+      - economy      # Haiku if needed
+
+    # Smaller independent quota for internal use
+    quotas:
+      standard: 10000000    # $10.00 per day
+      economy: 5000000      # $5.00 per day
+
+    overrides:
+      tight_mode_threshold_pct: 95
+
+  # Batch data processing - Cost-optimized
+  - app_id: "app-batch-processor"
+    app_name: "Batch Data Processor"
+
+    # Economy-first for batch workloads
+    model_ordering:
+      - economy      # Haiku is fast and cheap for batch
+      - standard     # Upgrade if needed
+
+    # Large volume but low cost per request
+    quotas:
+      economy: 30000000     # $30.00 per day (high volume)
+      standard: 10000000    # $10.00 per day
+
+    overrides:
+      # Batch can tolerate delays, run close to limit
+      tight_mode_threshold_pct: 98
+
+  # Development/staging environment - Minimal spend
+  - app_id: "app-dev-staging"
+    app_name: "Development & Staging"
+
+    # Economy only for non-production
+    model_ordering:
+      - economy      # Cheap for testing
+
+    # Small quota for dev work
+    quotas:
+      economy: 2000000      # $2.00 per day
+
+    overrides:
+      tight_mode_threshold_pct: 95
+
+# App-Level Scoping Behavior Examples
+# ====================================
+
+# Example 1: Cost Isolation
+# -------------------------
+# If app-customer-api exhausts its $50 premium quota:
+#   - app-customer-api falls back to standard
+#   - app-admin-dashboard still has full access to its $10 standard quota
+#   - app-batch-processor unaffected
+# Each app's spend doesn't impact others
+
+# Example 2: Independent Fallback Chains
+# ---------------------------------------
+# At 2:00 PM on a given day:
+#   - app-customer-api: Using standard (premium exhausted at 10 AM)
+#   - app-admin-dashboard: Using standard (never used premium)
+#   - app-batch-processor: Using economy (its primary choice)
+# Each app can be in different model states simultaneously
+
+# Example 3: Cost Attribution
+# ---------------------------
+# Daily spend breakdown (automatically tracked):
+#   - app-customer-api: $75.00 ($50 premium + $25 standard)
+#   - app-admin-dashboard: $10.00 (all standard)
+#   - app-batch-processor: $30.00 (all economy)
+#   - app-dev-staging: $1.50 (partial economy)
+# Total org cost: $116.50/day
+# Clear per-app cost visibility for chargeback/showback
+
+# Example 4: Quota Overrun Isolation
+# -----------------------------------
+# If app-batch-processor has a bug causing excessive usage:
+#   - app-batch-processor exhausts its quotas (economy + standard)
+#   - app-batch-processor starts getting 429 quota exceeded errors
+#   - app-customer-api and other apps continue normally
+#   - Blast radius contained to single app
+
+# Comparison with ORG-level scoping:
+# ==================================
+#
+# APP-level (this config):
+# ✅ Each app has guaranteed quota availability
+# ✅ Clear cost attribution per application
+# ✅ One app's overrun doesn't affect others
+# ✅ Different budgets per app priority
+# ❌ Slightly higher management overhead
+# ❌ Can't share unused quota between apps
+#
+# ORG-level (see config_example_org_scope.yaml):
+# ✅ Simpler configuration (one set of quotas)
+# ✅ Apps can use unused quota from other apps
+# ✅ Lower total spend (more efficient sharing)
+# ❌ One high-traffic app can exhaust quota for all
+# ❌ Harder to attribute costs per application
+# ❌ No isolation between apps
+
+# When to use APP-level scoping:
+# ==============================
+# Use APP scope when:
+# - You need cost attribution per service/team
+# - You want to prevent one app from impacting others
+# - Different apps have different SLA requirements
+# - Apps are owned by different teams/departments
+# - You need to do chargeback or showback
+# - Multiple production apps with varying criticality
+
+# When to use ORG-level scoping:
+# ===============================
+# Use ORG scope when:
+# - Small number of apps (2-3)
+# - All apps have similar priority
+# - You want simplest possible management
+# - Cost attribution not important
+# - Apps can share resources dynamically
+# - Single team owns all apps
+
+# Migration path:
+# ===============
+# You can start with ORG scope and migrate to APP scope later by:
+# 1. Update quota_scope: ORG → APP in org config
+# 2. Define per-app quotas based on historical usage
+# 3. Reload configuration via API or loader script
+# No code changes required, just configuration update
