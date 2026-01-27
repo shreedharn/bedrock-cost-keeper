@@ -12,7 +12,7 @@ from .main import get_db_bridge
 jwt_handler = JWTHandler()
 
 
-def get_current_user(
+async def get_current_user(
     authorization: Annotated[str, Header()],
     db: Annotated[DynamoDBBridge, Depends(get_db_bridge)]
 ) -> dict:
@@ -42,7 +42,7 @@ def get_current_user(
 
     # Check if token is revoked
     token_jti = payload.get("jti")
-    if db.is_token_revoked(token_jti):
+    if await db.is_token_revoked(token_jti):
         raise UnauthorizedException("Token has been revoked")
 
     # Return user info

@@ -1,8 +1,8 @@
 """Model selection endpoints."""
 
-from fastapi import APIRouter, Depends, Path, Query
 from typing import Annotated
 from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, Path, Query
 
 from ..models.responses import ModelSelectionResponse, RecommendedModel, QuotaStatus, PricingInfo, ClientGuidance, ModelStatusInfo
 from ...infrastructure.database.dynamodb_bridge import DynamoDBBridge
@@ -20,9 +20,9 @@ router = APIRouter()
 async def get_model_selection(
     org_id: Annotated[str, Path(description="Organization UUID")],
     app_id: Annotated[str, Path(description="Application identifier")],
-    force_check: Annotated[bool, Query(description="Force real-time quota check")] = False,
     db: Annotated[DynamoDBBridge, Depends(get_db_bridge)],
-    current_user: Annotated[dict, Depends(get_current_user)]
+    current_user: Annotated[dict, Depends(get_current_user)],
+    force_check: Annotated[bool, Query(description="Force real-time quota check")] = False
 ):
     """
     Get current recommended model based on quota status and sticky fallback state.

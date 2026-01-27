@@ -1,8 +1,8 @@
 """Pydantic response models for API endpoints."""
-
-from typing import Optional, Dict, List
-from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional, Dict, List, Any
+from pydantic import BaseModel
+
 
 
 class TokenResponse(BaseModel):
@@ -181,7 +181,7 @@ class CostSubmissionResponse(BaseModel):
     request_id: str
     status: str
     message: str
-    processing: Dict[str, any]
+    processing: Dict[str, Any]
     timestamp: datetime
 
 

@@ -1,6 +1,6 @@
 """Pydantic request models for API endpoints."""
 
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field, UUID4, field_validator
 
@@ -32,7 +32,7 @@ class OrgRegistrationRequest(BaseModel):
     quota_scope: str = Field(..., pattern="^(ORG|APP)$")
     model_ordering: List[str] = Field(..., min_length=1)
     quotas: Dict[str, int]
-    overrides: Optional[Dict[str, any]] = None
+    overrides: Optional[Dict[str, Any]] = None
 
     @field_validator('quotas')
     @classmethod
@@ -50,7 +50,7 @@ class AppRegistrationRequest(BaseModel):
     app_name: str
     model_ordering: Optional[List[str]] = None
     quotas: Optional[Dict[str, int]] = None
-    overrides: Optional[Dict[str, any]] = None
+    overrides: Optional[Dict[str, Any]] = None
 
 
 class CredentialRotationRequest(BaseModel):
