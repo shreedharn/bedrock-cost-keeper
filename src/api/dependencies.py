@@ -6,10 +6,17 @@ from ..infrastructure.security.jwt_handler import JWTHandler
 from ..infrastructure.database.dynamodb_bridge import DynamoDBBridge
 from ..core.config import settings
 from ..core.exceptions import UnauthorizedException
-from .main import get_db_bridge
 
+
+# Global database bridge instance
+db_bridge: DynamoDBBridge = None
 
 jwt_handler = JWTHandler()
+
+
+def get_db_bridge() -> DynamoDBBridge:
+    """Dependency to get database bridge."""
+    return db_bridge
 
 
 async def get_current_user(

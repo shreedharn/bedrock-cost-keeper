@@ -9,8 +9,7 @@ from ..models.responses import CostSubmissionResponse, BatchCostSubmissionRespon
 from ...infrastructure.database.dynamodb_bridge import DynamoDBBridge
 from ...domain.services.metering_service import MeteringService
 from ...core.exceptions import InvalidConfigException
-from ..main import get_db_bridge
-from ..dependencies import get_current_user
+from ..dependencies import get_db_bridge, get_current_user
 
 
 

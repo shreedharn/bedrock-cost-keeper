@@ -9,8 +9,7 @@ from ...infrastructure.database.dynamodb_bridge import DynamoDBBridge
 from ...domain.services.metering_service import MeteringService
 from ...core.config import main_config
 from ...core.exceptions import InvalidConfigException, QuotaExceededException
-from ..main import get_db_bridge
-from ..dependencies import get_current_user
+from ..dependencies import get_db_bridge, get_current_user
 
 
 router = APIRouter()

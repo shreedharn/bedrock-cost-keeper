@@ -13,18 +13,15 @@ from ..infrastructure.database.dynamodb_bridge import DynamoDBBridge
 # Import routers
 from .routes import auth, costs, model_selection, provisioning, aggregates
 
-
-# Global database bridge instance
-db_bridge: DynamoDBBridge = None
+# Import dependencies
+from . import dependencies
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan management."""
-    global db_bridge
-
     # Startup
-    db_bridge = DynamoDBBridge()
+    dependencies.db_bridge = DynamoDBBridge()
     print(f"Starting {settings.app_name} v{settings.version}")
 
     yield
@@ -97,7 +94,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    db_healthy = await db_bridge.health_check() if db_bridge else False
+    db_healthy = await dependencies.db_bridge.health_check() if dependencies.db_bridge else False
 
     return {
         "status": "healthy" if db_healthy else "unhealthy",
@@ -150,8 +147,3 @@ async def root():
         "docs": "/docs" if settings.debug else "disabled",
         "health": "/health"
     }
-
-
-def get_db_bridge() -> DynamoDBBridge:
-    """Dependency to get database bridge."""
-    return db_bridge

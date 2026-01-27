@@ -9,7 +9,7 @@ from ...infrastructure.database.dynamodb_bridge import DynamoDBBridge
 from ...infrastructure.security.jwt_handler import JWTHandler
 from ...core.exceptions import UnauthorizedException
 from ...core.config import settings
-from ..main import get_db_bridge
+from ..dependencies import get_db_bridge
 
 
 router = APIRouter()

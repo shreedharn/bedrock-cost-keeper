@@ -14,8 +14,7 @@ from ...infrastructure.database.dynamodb_bridge import DynamoDBBridge
 from ...infrastructure.security.jwt_handler import JWTHandler
 from ...core.config import main_config
 from ...core.exceptions import InvalidConfigException, AlreadyExistsException
-from ..main import get_db_bridge
-from ..dependencies import verify_provisioning_api_key
+from ..dependencies import get_db_bridge, verify_provisioning_api_key
 
 
 router = APIRouter()

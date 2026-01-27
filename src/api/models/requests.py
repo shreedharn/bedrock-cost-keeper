@@ -1,7 +1,7 @@
 """Pydantic request models for API endpoints."""
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field, UUID4, field_validator
 
 
@@ -73,7 +73,7 @@ class CostSubmissionRequest(BaseModel):
     @classmethod
     def validate_timestamp(cls, v):
         """Ensure timestamp is not in the future."""
-        if v > datetime.utcnow():
+        if v > datetime.now(timezone.utc):
             raise ValueError("Timestamp cannot be in the future")
         return v
 
