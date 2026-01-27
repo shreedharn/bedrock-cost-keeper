@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """Application settings."""
 
     # API Settings
-    app_name: str = "Bedrock Price Keeper"
+    app_name: str = "Bedrock Cost Keeper"
     version: str = "1.0.0"
     api_prefix: str = "/api/v1"
 
@@ -24,15 +24,16 @@ class Settings(BaseSettings):
     aws_region: str = Field(default="us-east-1", env="AWS_REGION")
     aws_access_key_id: Optional[str] = Field(default=None, env="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: Optional[str] = Field(default=None, env="AWS_SECRET_ACCESS_KEY")
+    aws_endpoint_url: Optional[str] = Field(default=None, env="AWS_ENDPOINT_URL")
 
     # DynamoDB Table Names
-    dynamodb_config_table: str = Field(default="bedrock-price-keeper-config")
-    dynamodb_sticky_state_table: str = Field(default="bedrock-price-keeper-sticky-state")
-    dynamodb_usage_agg_sharded_table: str = Field(default="bedrock-price-keeper-usage-agg-sharded")
-    dynamodb_daily_total_table: str = Field(default="bedrock-price-keeper-daily-total")
-    dynamodb_pricing_cache_table: str = Field(default="bedrock-price-keeper-pricing-cache")
-    dynamodb_revoked_tokens_table: str = Field(default="bedrock-price-keeper-revoked-tokens")
-    dynamodb_secret_retrieval_tokens_table: str = Field(default="bedrock-price-keeper-secret-retrieval-tokens")
+    dynamodb_config_table: str = Field(default="bedrock-cost-keeper-config")
+    dynamodb_sticky_state_table: str = Field(default="bedrock-cost-keeper-usage")
+    dynamodb_usage_agg_sharded_table: str = Field(default="bedrock-cost-keeper-aggregates")
+    dynamodb_daily_total_table: str = Field(default="bedrock-cost-keeper-aggregates")
+    dynamodb_pricing_cache_table: str = Field(default="bedrock-cost-keeper-config")
+    dynamodb_revoked_tokens_table: str = Field(default="bedrock-cost-keeper-tokens")
+    dynamodb_secret_retrieval_tokens_table: str = Field(default="bedrock-cost-keeper-secrets")
 
     # JWT Settings
     jwt_secret_key: str = Field(default="your-secret-key-change-in-production", env="JWT_SECRET_KEY")

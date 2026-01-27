@@ -20,12 +20,15 @@ class DynamoDBBridge(DatabaseBridge):
     async def _get_dynamodb(self):
         """Get DynamoDB resource (lazy initialization)."""
         if self._dynamodb is None:
-            self._dynamodb = await self.session.resource(
-                'dynamodb',
-                region_name=settings.aws_region,
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key
-            ).__aenter__()
+            kwargs = {
+                'region_name': settings.aws_region,
+                'aws_access_key_id': settings.aws_access_key_id,
+                'aws_secret_access_key': settings.aws_secret_access_key
+            }
+            if settings.aws_endpoint_url:
+                kwargs['endpoint_url'] = settings.aws_endpoint_url
+
+            self._dynamodb = await self.session.resource('dynamodb', **kwargs).__aenter__()
         return self._dynamodb
 
     # ==================== Config Operations ====================
@@ -37,7 +40,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'PK': f'ORG#{org_id}', 'SK': ''}
+                Key={'pk': f'ORG#{org_id}', 'sk': 'CONFIG'}
             )
             return response.get('Item')
         except ClientError:
@@ -50,7 +53,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'PK': f'ORG#{org_id}', 'SK': f'APP#{app_id}'}
+                Key={'pk': f'ORG#{org_id}', 'sk': f'APP#{app_id}'}
             )
             return response.get('Item')
         except ClientError:
@@ -93,7 +96,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'PK': scope, 'SK': day}
+                Key={'pk': scope, 'sk': day}
             )
             return response.get('Item')
         except ClientError:
@@ -158,18 +161,28 @@ class DynamoDBBridge(DatabaseBridge):
 
         pk = f'{scope}#LABEL#{model_label}#SH#{shard_id}'
 
-        await table.update_item(
-            Key={'PK': pk, 'SK': day},
-            UpdateExpression='ADD cost_usd_micros :c, input_tokens :i, output_tokens :o, requests :r, request_ids :rid SET updated_at_epoch = :t',
-            ExpressionAttributeValues={
-                ':c': cost_usd_micros,
-                ':i': input_tokens,
-                ':o': output_tokens,
-                ':r': requests,
-                ':rid': {request_id},  # Set - DynamoDB will handle duplicates
-                ':t': int(time.time())
-            }
-        )
+        # Use conditional expression for idempotency - only update if request_id not in set
+        try:
+            await table.update_item(
+                Key={'pk': pk, 'sk': day},
+                UpdateExpression='ADD cost_usd_micros :c, input_tokens :i, output_tokens :o, requests :r, request_ids :rid SET updated_at_epoch = :t',
+                ConditionExpression='NOT contains(request_ids, :req_id) OR attribute_not_exists(request_ids)',
+                ExpressionAttributeValues={
+                    ':c': cost_usd_micros,
+                    ':i': input_tokens,
+                    ':o': output_tokens,
+                    ':r': requests,
+                    ':rid': {request_id},
+                    ':req_id': request_id,
+                    ':t': int(time.time())
+                }
+            )
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+                # Request already processed - this is idempotent behavior
+                pass
+            else:
+                raise
 
     async def get_usage_shards(
         self,
@@ -184,7 +197,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         # Build keys for batch get
         keys = [
-            {'PK': f'{scope}#LABEL#{model_label}#SH#{i}', 'SK': day}
+            {'PK': f'{scope}#LABEL#{model_label}#SH#{i}', 'sk': day}
             for i in range(shard_count)
         ]
 
@@ -210,7 +223,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'PK': f'{scope}#LABEL#{model_label}', 'SK': day}
+                Key={'pk': f'{scope}#LABEL#{model_label}', 'sk': day}
             )
             return response.get('Item')
         except ClientError:
@@ -227,7 +240,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         # Build keys for batch get
         keys = [
-            {'PK': f'{scope}#LABEL#{label}', 'SK': day}
+            {'pk': f'{scope}#LABEL#{label}', 'sk': day}
             for label in model_labels
         ]
 
@@ -242,8 +255,8 @@ class DynamoDBBridge(DatabaseBridge):
         # Map items by model label
         result = {}
         for item in items:
-            # Extract label from PK
-            pk_parts = item['PK'].split('#LABEL#')
+            # Extract label from pk
+            pk_parts = item['pk'].split('#LABEL#')
             if len(pk_parts) == 2:
                 label = pk_parts[1]
                 result[label] = item
@@ -285,7 +298,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'PK': bedrock_model_id, 'SK': date}
+                Key={'pk': bedrock_model_id, 'sk': date}
             )
             return response.get('Item')
         except ClientError:
@@ -319,7 +332,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'PK': token_jti}
+                Key={'pk': token_jti}
             )
             return 'Item' in response
         except ClientError:
@@ -386,7 +399,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.update_item(
-                Key={'PK': token_uuid},
+                Key={'pk': token_uuid},
                 UpdateExpression='SET used = :true, used_at_epoch = :now',
                 ConditionExpression='used = :false AND expires_at_epoch > :now',
                 ExpressionAttributeValues={

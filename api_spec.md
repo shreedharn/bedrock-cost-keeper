@@ -1,11 +1,11 @@
-# Bedrock Price Keeper - REST API Specification
+# Bedrock Cost Keeper - REST API Specification
 
 ## Overview
 
-The Bedrock Price Keeper REST API provides endpoints for managing organization and application configurations, retrieving usage aggregates, selecting models based on quotas, and submitting cost data.
+The Bedrock Cost Keeper REST API provides endpoints for managing organization and application configurations, retrieving usage aggregates, selecting models based on quotas, and submitting cost data.
 
 **Version:** v1
-**Base URL:** `https://price-keeper.{region}.amazonaws.com/api/v1`
+**Base URL:** `https://cost-keeper.{region}.amazonaws.com/api/v1`
 **Protocol:** HTTPS only
 **Authentication:** JWT Bearer Token (Client ID + Client Secret)
 
@@ -124,7 +124,7 @@ Content-Type: application/json
   "token_type": "access",
   "iat": 1737638445,
   "exp": 1737642045,
-  "iss": "bedrock-price-keeper"
+  "iss": "bedrock-cost-keeper"
 }
 ```
 
@@ -135,7 +135,7 @@ Content-Type: application/json
   "token_type": "refresh",
   "iat": 1737638445,
   "exp": 1740230445,
-  "iss": "bedrock-price-keeper"
+  "iss": "bedrock-cost-keeper"
 }
 ```
 
@@ -1741,15 +1741,15 @@ The API uses URL-based versioning (`/api/v1`).
 
 ## Support & Contact
 
-**Documentation:** https://docs.aws.amazon.com/bedrock-price-keeper/
+**Documentation:** https://docs.aws.amazon.com/bedrock-cost-keeper/
 **API Status:** https://status.aws.amazon.com/
 **Support:** Open ticket via AWS Support Center
 
 **SDKs Available:**
-- Python: `pip install bedrock-price-keeper-sdk`
+- Python: `pip install bedrock-cost-keeper-sdk`
 - Java: Available via Maven Central
-- JavaScript/TypeScript: `npm install @aws/bedrock-price-keeper-client`
-- Go: `go get github.com/aws/bedrock-price-keeper-sdk-go`
+- JavaScript/TypeScript: `npm install @aws/bedrock-cost-keeper-client`
+- Go: `go get github.com/aws/bedrock-cost-keeper-sdk-go`
 
 ---
 

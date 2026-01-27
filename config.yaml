@@ -1,4 +1,4 @@
-# Bedrock Price Keeper - Main Configuration
+# Bedrock Cost Keeper - Main Configuration
 #
 # This file defines the global system configuration including:
 # - Model label mappings to Bedrock model IDs
@@ -6,7 +6,7 @@
 # - System-wide defaults
 ---
 service:
-  name: bedrock-price-keeper
+  name: bedrock-cost-keeper
   version: 1.0.0
 
 # System-wide default settings
@@ -79,11 +79,11 @@ model_labels:
 dynamodb:
   # Table names (can be prefixed with environment)
   tables:
-    config: bedrock-price-keeper-config
-    sticky_state: bedrock-price-keeper-sticky-state
-    usage_agg_sharded: bedrock-price-keeper-usage-agg-sharded
-    daily_total: bedrock-price-keeper-daily-total
-    pricing_cache: bedrock-price-keeper-pricing-cache
+    config: bedrock-cost-keeper-config
+    sticky_state: bedrock-cost-keeper-sticky-state
+    usage_agg_sharded: bedrock-cost-keeper-usage-agg-sharded
+    daily_total: bedrock-cost-keeper-daily-total
+    pricing_cache: bedrock-cost-keeper-pricing-cache
 
 # Background process configuration
 background_processes:
@@ -110,7 +110,7 @@ monitoring:
   # CloudWatch metrics
   cloudwatch:
     enabled: true
-    namespace: BedrockPriceKeeper
+    namespace: BedrockCostKeeper
 
   # Custom metrics to publish
   metrics:

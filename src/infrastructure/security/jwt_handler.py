@@ -45,7 +45,7 @@ class JWTHandler:
             "jti": str(uuid.uuid4()),
             "iat": now,
             "exp": expires_at,
-            "iss": "bedrock-price-keeper"
+            "iss": "bedrock-cost-keeper"
         }
 
         if app_id:
@@ -79,7 +79,7 @@ class JWTHandler:
             "jti": str(uuid.uuid4()),
             "iat": now,
             "exp": expires_at,
-            "iss": "bedrock-price-keeper"
+            "iss": "bedrock-cost-keeper"
         }
 
         token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
