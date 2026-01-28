@@ -1,7 +1,7 @@
 """Application configuration."""
 
 from typing import Optional
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 import yaml
 from pathlib import Path
@@ -21,10 +21,10 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # AWS Settings
-    aws_region: str = Field(default="us-east-1", env="AWS_REGION")
-    aws_access_key_id: Optional[str] = Field(default=None, env="AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: Optional[str] = Field(default=None, env="AWS_SECRET_ACCESS_KEY")
-    aws_endpoint_url: Optional[str] = Field(default=None, env="AWS_ENDPOINT_URL")
+    aws_region: str = Field(default="us-east-1", validation_alias="AWS_REGION")
+    aws_access_key_id: Optional[str] = Field(default=None, validation_alias="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: Optional[str] = Field(default=None, validation_alias="AWS_SECRET_ACCESS_KEY")
+    aws_endpoint_url: Optional[str] = Field(default=None, validation_alias="AWS_ENDPOINT_URL")
 
     # DynamoDB Table Names
     dynamodb_config_table: str = Field(default="bedrock-cost-keeper-config")
@@ -36,13 +36,13 @@ class Settings(BaseSettings):
     dynamodb_secret_retrieval_tokens_table: str = Field(default="bedrock-cost-keeper-secrets")
 
     # JWT Settings
-    jwt_secret_key: str = Field(default="your-secret-key-change-in-production", env="JWT_SECRET_KEY")
+    jwt_secret_key: str = Field(default="your-secret-key-change-in-production", validation_alias="JWT_SECRET_KEY")
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_seconds: int = 3600  # 1 hour
     jwt_refresh_token_expire_seconds: int = 2592000  # 30 days
 
     # Provisioning API Key
-    provisioning_api_key: str = Field(default="change-me-in-production", env="PROVISIONING_API_KEY")
+    provisioning_api_key: str = Field(default="change-me-in-production", validation_alias="PROVISIONING_API_KEY")
 
     # Rate Limiting
     rate_limit_enabled: bool = True
@@ -50,9 +50,7 @@ class Settings(BaseSettings):
     # Config File Path
     main_config_path: str = "config.yaml"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
 
 # Global settings instance
