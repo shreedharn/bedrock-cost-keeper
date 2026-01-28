@@ -105,7 +105,6 @@ Bedrock Cost Keeper solves these challenges with a lightweight, scalable service
 
 ### Deployment & Operations
 - **[Deployment Guide](./docs/DEPLOYMENT.md)** - Step-by-step AWS deployment instructions
-- **[Infrastructure Overview](./INFRASTRUCTURE.md)** - CloudFormation architecture and components
 - **[CloudFormation Templates](./cloudformation/README.md)** - IaC templates for AWS deployment
 
 ### Testing & Development
@@ -119,7 +118,7 @@ Bedrock Cost Keeper solves these challenges with a lightweight, scalable service
 - Python 3.12+
 - Docker (for local development)
 - AWS CLI v2 (for deployment)
-- PostgreSQL or DynamoDB Local (for testing)
+- DynamoDB Local (for testing)
 
 ### Local Setup
 
@@ -352,16 +351,6 @@ See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for detailed cost breakdown.
 - Private subnet deployment (no public IPs for tasks)
 - HTTPS-only API (enforced by ALB)
 
-## Contributing
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Write tests for new functionality
-4. Ensure all tests pass (`pytest tests/`)
-5. Commit changes (`git commit -m 'Add amazing feature'`)
-6. Push to branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
 
 ### Development Guidelines
 
@@ -372,17 +361,6 @@ Contributions are welcome! Please:
 - Add integration tests for new endpoints
 
 ## Troubleshooting
-
-### Common Issues
-
-**Issue**: Service returns 503 Service Unavailable
-**Solution**: Check ECS task health and CloudWatch logs
-
-**Issue**: Costs not aggregating
-**Solution**: Verify aggregator process is running, check DynamoDB permissions
-
-**Issue**: Model selection returns 429 Too Many Requests
-**Solution**: All quotas exceeded; wait until next day or increase quotas
 
 See [DEPLOYMENT.md](./docs/DEPLOYMENT.md#troubleshooting) for detailed troubleshooting.
 
@@ -396,10 +374,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Documentation**: See [docs/](./docs/) directory
 - **Issues**: Report bugs via GitHub Issues
 - **Questions**: Open a GitHub Discussion
-
-## Acknowledgments
-- Built with [FastAPI](https://fastapi.tiangolo.com/)
-- Deployed on [AWS ECS Fargate](https://aws.amazon.com/fargate/)
-- Database: [Amazon DynamoDB](https://aws.amazon.com/dynamodb/)
-- Powered by [Amazon Bedrock](https://aws.amazon.com/bedrock/)
 ---

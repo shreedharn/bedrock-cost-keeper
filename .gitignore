@@ -101,7 +101,6 @@ cloudformation/parameters/*-secrets.json
 test_output/
 test_results/
 
-*_TESTING.md
 *_SUMMARY.md
 *_Analysis.md
 *_Completion.md
