@@ -99,9 +99,9 @@ Bedrock Cost Keeper solves these challenges with a lightweight, scalable service
 ## Documentation
 
 ### Core Specifications
-- **[Application Specification](./app_spec.md)** - System architecture, operating modes, client integration
-- **[Database Schema](./db_spec.md)** - DynamoDB table design, access patterns, anti-hot-partition techniques
-- **[API Reference](./api_spec.md)** - Complete REST API documentation with examples
+- **[Application Specification](./docs/app_spec.md)** - System architecture, operating modes, client integration
+- **[Database Schema](./docs/db_spec.md)** - DynamoDB table design, access patterns, anti-hot-partition techniques
+- **[API Reference](./docs/api_spec.md)** - Complete REST API documentation with examples
 
 ### Deployment & Operations
 - **[Deployment Guide](./docs/DEPLOYMENT.md)** - Step-by-step AWS deployment instructions
@@ -109,8 +109,7 @@ Bedrock Cost Keeper solves these challenges with a lightweight, scalable service
 - **[CloudFormation Templates](./cloudformation/README.md)** - IaC templates for AWS deployment
 
 ### Testing & Development
-- **[Test Suite Summary](./TEST_SUITE_SUMMARY.md)** - Overview of test coverage
-- **[Integration Testing](./INTEGRATION_TESTING.md)** - Integration test guide
+- **[Integration Testing](./docs/integration_testing.md)** - Integration test guide
 - **[Test Client](./test-client/README.md)** - End-to-end test client usage
 
 ## Quick Start
@@ -188,7 +187,7 @@ cd test-client
 python bedrock_client.py
 ```
 
-See [INTEGRATION_TESTING.md](./INTEGRATION_TESTING.md) for detailed testing instructions.
+See [Integration Testing Guide](./docs/integration_testing.md) for detailed testing instructions.
 
 ### Local Development with Docker
 
@@ -295,7 +294,7 @@ requests.post(
 )
 ```
 
-See [API Reference](./api_spec.md) for complete API documentation.
+See [API Reference](./docs/api_spec.md) for complete API documentation.
 
 ## Project Structure
 
@@ -341,7 +340,7 @@ bedrock_metering/
 - Daily quotas per model
 - App-specific overrides
 
-See [Application Specification](./app_spec.md) for configuration details.
+See [Application Specification](./docs/app_spec.md) for configuration details.
 
 See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for detailed cost breakdown.
 
