@@ -1,5 +1,25 @@
 # Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Testing / Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+.hypothesis/
+*.cover
+*.log
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
 
 # Virtual Environments
 .venv

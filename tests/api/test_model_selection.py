@@ -2,14 +2,13 @@
 
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestModelSelectionEndpoint:
     """Tests for GET /orgs/{org_id}/apps/{app_id}/model-selection endpoint."""
 
-    @pytest.mark.asyncio
-    async def test_model_selection_normal_mode(
+    def test_model_selection_normal_mode(
         self, test_client, mock_db, auth_headers, mock_org_config, mock_app_config
     ):
         """Test model selection in normal mode."""
@@ -19,7 +18,7 @@ class TestModelSelectionEndpoint:
         mock_db.get_sticky_state = AsyncMock(return_value=None)
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
-        with patch('src.domain.services.metering_service.MeteringService') as MockService:
+        with patch('src.api.routes.model_selection.MeteringService') as MockService:
             mock_service = MockService.return_value
             mock_service.get_current_usage = AsyncMock(return_value={
                 'premium': {'cost_usd_micros': 100000},
@@ -42,8 +41,7 @@ class TestModelSelectionEndpoint:
         assert data["quota_status"]["mode"] == "NORMAL"
         assert data["client_guidance"]["check_frequency"] == "PERIODIC_300S"
 
-    @pytest.mark.asyncio
-    async def test_model_selection_tight_mode(
+    def test_model_selection_tight_mode(
         self, test_client, mock_db, auth_headers, mock_org_config, mock_app_config
     ):
         """Test model selection when quota is tight."""
@@ -52,7 +50,7 @@ class TestModelSelectionEndpoint:
         mock_db.get_sticky_state = AsyncMock(return_value=None)
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
-        with patch('src.domain.services.metering_service.MeteringService') as MockService:
+        with patch('src.api.routes.model_selection.MeteringService') as MockService:
             mock_service = MockService.return_value
             # 96% of quota used - should trigger TIGHT mode
             mock_service.get_current_usage = AsyncMock(return_value={
@@ -73,8 +71,7 @@ class TestModelSelectionEndpoint:
         assert data["client_guidance"]["check_frequency"] == "PERIODIC_60S"
         assert data["client_guidance"]["cache_duration_secs"] == 60
 
-    @pytest.mark.asyncio
-    async def test_model_selection_sticky_fallback(
+    def test_model_selection_sticky_fallback(
         self, test_client, mock_db, auth_headers, mock_org_config, mock_app_config
     ):
         """Test model selection with sticky fallback active."""
@@ -86,7 +83,7 @@ class TestModelSelectionEndpoint:
         })
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
-        with patch('src.domain.services.metering_service.MeteringService') as MockService:
+        with patch('src.api.routes.model_selection.MeteringService') as MockService:
             mock_service = MockService.return_value
             mock_service.get_current_usage = AsyncMock(return_value={
                 'premium': {'cost_usd_micros': 600000},
@@ -107,8 +104,7 @@ class TestModelSelectionEndpoint:
         assert data["recommended_model"]["reason"] == "STICKY_FALLBACK"
         assert data["quota_status"]["sticky_fallback_active"] is True
 
-    @pytest.mark.asyncio
-    async def test_model_selection_all_quotas_exceeded(
+    def test_model_selection_all_quotas_exceeded(
         self, test_client, mock_db, auth_headers, mock_org_config, mock_app_config
     ):
         """Test model selection when all quotas are exceeded."""
@@ -117,7 +113,7 @@ class TestModelSelectionEndpoint:
         mock_db.get_sticky_state = AsyncMock(return_value=None)
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
-        with patch('src.domain.services.metering_service.MeteringService') as MockService:
+        with patch('src.api.routes.model_selection.MeteringService') as MockService:
             mock_service = MockService.return_value
             mock_service.get_current_usage = AsyncMock(return_value={
                 'premium': {'cost_usd_micros': 600000},
@@ -135,8 +131,7 @@ class TestModelSelectionEndpoint:
         data = response.json()
         assert data["error"] == "QUOTA_EXCEEDED"
 
-    @pytest.mark.asyncio
-    async def test_model_selection_unauthorized_org(
+    def test_model_selection_unauthorized_org(
         self, test_client, mock_db, jwt_handler, mock_org_config
     ):
         """Test model selection with mismatched org_id."""
@@ -158,8 +153,7 @@ class TestModelSelectionEndpoint:
 
         assert response.status_code == 400
 
-    @pytest.mark.asyncio
-    async def test_model_selection_org_not_found(
+    def test_model_selection_org_not_found(
         self, test_client, mock_db, auth_headers
     ):
         """Test model selection when organization doesn't exist."""

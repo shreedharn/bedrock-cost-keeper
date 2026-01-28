@@ -27,20 +27,21 @@ async def obtain_token(
     Implements OAuth2 client_credentials flow.
     """
     # Parse client_id to extract org_id and app_id
-    client_parts = request.client_id.split('-')
-
-    # Expected format: "org-{uuid}-app-{app_id}" or "org-{uuid}"
-    if len(client_parts) < 2:
+    # Expected format: "org-{org_id}-app-{app_id}" or "org-{org_id}"
+    if not request.client_id.startswith('org-'):
         raise UnauthorizedException("Invalid client_id format")
 
-    org_id = client_parts[1]  # UUID after "org-"
-    app_id = None
+    # Remove 'org-' prefix
+    remaining = request.client_id[4:]
 
     # Check if this is an app-level client
-    if 'app' in request.client_id:
-        app_idx = request.client_id.find('-app-')
-        if app_idx > 0:
-            app_id = request.client_id[app_idx + 5:]  # Everything after "-app-"
+    app_id = None
+    if '-app-' in remaining:
+        app_idx = remaining.find('-app-')
+        org_id = remaining[:app_idx]
+        app_id = remaining[app_idx + 5:]  # Everything after "-app-"
+    else:
+        org_id = remaining
 
     # Get configuration to verify credentials
     if app_id:

@@ -1,18 +1,16 @@
 """JWT token handling for authentication."""
 
+import base64
+import secrets
 import time
 import uuid
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta, timezone
-from jose import jwt, JWTError
-from passlib.context import CryptContext
+
+import bcrypt
+import jwt
 
 from ...core.config import settings
 from ...core.exceptions import UnauthorizedException
-
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class JWTHandler:
@@ -107,11 +105,11 @@ class JWTHandler:
                 algorithms=[settings.jwt_algorithm]
             )
             return payload
-        except JWTError as e:
+        except jwt.InvalidTokenError as e:
             raise UnauthorizedException(
                 message="Invalid or expired token",
                 details={"error": str(e)}
-            )
+            ) from e
 
     @staticmethod
     def verify_token_type(payload: Dict[str, Any], expected_type: str) -> None:
@@ -143,7 +141,9 @@ class JWTHandler:
         Returns:
             Bcrypt hash
         """
-        return pwd_context.hash(secret)
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(secret.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
 
     @staticmethod
     def verify_secret(plain_secret: str, hashed_secret: str) -> bool:
@@ -157,7 +157,13 @@ class JWTHandler:
         Returns:
             True if secret matches, False otherwise
         """
-        return pwd_context.verify(plain_secret, hashed_secret)
+        try:
+            return bcrypt.checkpw(
+                plain_secret.encode('utf-8'),
+                hashed_secret.encode('utf-8')
+            )
+        except (ValueError, AttributeError):
+            return False
 
     @staticmethod
     def generate_secret() -> str:
@@ -167,6 +173,4 @@ class JWTHandler:
         Returns:
             Base64-encoded 32-byte random string
         """
-        import secrets
-        import base64
         return base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
