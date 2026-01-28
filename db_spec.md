@@ -4,11 +4,10 @@
 
 This database design supports the Bedrock Price Keeper REST service with the following characteristics:
 
-- **N models** with label-based configuration (not limited to 2 models)
-- **Org and App scoping** (not user-based)
+- **N models** with label-based configuration 
+- **Org and App scoping** 
 - **Sticky fallback** through ordered model chains
 - **Post-response metering** with eventual consistency
-- **No hot partitions** through sharding and careful access patterns
 
 ---
 
@@ -18,8 +17,8 @@ This database design supports the Bedrock Price Keeper REST service with the fol
 
 1. **Distributed writes**: Cost data distributed across N sharded counters
 2. **Aggregated reads**: Single consolidated item for quota checks
-3. **Controlled cadence**: Background aggregator updates totals every 60s
-4. **Request-centric partitions**: Random UUIDs prevent write concentration
+3. **Controlled cadence**: Background aggregator updates totals every 60s (configurable)
+
 
 ### Cost Optimization
 
@@ -28,21 +27,23 @@ This database design supports the Bedrock Price Keeper REST service with the fol
 - TTL-based automatic cleanup
 - Minimal index overhead
 
-**Target cost**: ~$1.74/month for 10 req/s workload
+**Target cost**: ~$1.74/month for 10 req/s workload*
+
+*_Cost estimates are illustrative only. Verify with current AWS pricing and validate accuracy based on your usage patterns._
 
 ---
 
 ## Table Summary
 
-| Table | Purpose | Write Pattern | Hot Partition Risk |
+| Table | Purpose | Write Pattern | Notes |
 |-------|---------|---------------|-------------------|
-| **Config** | Org/app settings + credentials | Low (admin updates) | ✅ None |
-| **StickyState** | Fallback tracking | Once per day per scope/model | ✅ None |
-| **UsageAggSharded** | Distributed counters | Per-request (8-64 shards) | ✅ None (sharded) |
-| **DailyTotal** | Aggregated totals | Every 60s (by aggregator) | ✅ None (controlled cadence) |
-| **PricingCache** | Bedrock pricing | Once per day | ✅ None |
-| **RevokedTokens** | Token revocation list | Rare (on revoke) | ✅ None |
-| **SecretRetrievalTokens** | One-time secret tokens | Rare (on registration/rotation) | ✅ None |
+| **Config** | Org/app settings + credentials | Low (admin updates) |  None |
+| **StickyState** | Fallback tracking | Once per day per scope/model | None |
+| **UsageAggSharded** | Distributed counters | Per-request (8-64 shards) | Sharded |
+| **DailyTotal** | Aggregated totals | Every 60s (by aggregator) |  Controlled cadence |
+| **PricingCache** | Bedrock pricing | Once per day |  None |
+| **RevokedTokens** | Token revocation list | Rare (on revoke) |  None |
+| **SecretRetrievalTokens** | One-time secret tokens | Rare (on registration/rotation) |  None |
 
 ---
 
@@ -912,23 +913,25 @@ expires_at_epoch = created_at_epoch + 600
 
 Shard count is **immutable per org** - set at creation, cannot change without data migration.
 
-| Peak Traffic | Recommended Shards | Max Throughput per Shard |
-|-------------|-------------------|------------------------|
-| < 50 req/s  | 8                 | ~6 req/s               |
-| 50-200 req/s | 16                | ~12 req/s              |
-| 200-500 req/s | 32               | ~15 req/s              |
-| > 500 req/s | 64                | ~8 req/s               |
-
 **DynamoDB limits**:
 - 3,000 RCU per partition (eventual consistency)
 - 1,000 WCU per partition
 - With atomic ADD operations, practical limit ~100 WCU/partition/second
 
-**Safety margin**: Recommend shards that keep per-shard write rate < 50 WCU/second
 
 ---
 
 ## Cost Analysis (10 req/s workload)
+
+> **⚠️ COST DISCLAIMER**
+>
+> All cost estimates provided in this section are for **illustrative purposes only** and must be verified against current AWS pricing. Actual costs may vary significantly based on:
+> - Usage patterns and traffic volume
+> - AWS region
+> - Current AWS pricing (subject to change)
+> - Optimization strategies implemented
+>
+> **Always validate cost calculations with the latest AWS pricing information and conduct your own cost analysis before deployment.**
 
 ### Monthly DynamoDB Costs
 
@@ -968,8 +971,6 @@ Shard count is **immutable per org** - set at creation, cannot change without da
 
 ## Index Strategy
 
-### No GSIs Required for Core Functionality
-
 All access patterns use primary key lookups:
 - Config: Direct PK+SK access
 - StickyState: Direct PK access
@@ -977,10 +978,6 @@ All access patterns use primary key lookups:
 - DailyTotal: Direct PK access or BatchGetItem
 - PricingCache: Direct PK+SK access
 
-**Benefit**:
-- ✅ Lower write costs (no GSI maintenance)
-- ✅ Simpler schema
-- ✅ Faster writes
 
 ### Optional GSIs for Advanced Use Cases
 
@@ -1065,29 +1062,6 @@ UpdateItem: StickyState
 
 ---
 
-## Performance Characteristics
-
-### Latency Targets
-
-| Operation | Target Latency | DynamoDB Operations |
-|-----------|---------------|-------------------|
-| Token validation | < 20ms | 1 GetItem (RevokedTokens check, cacheable) |
-| Model selection | < 120ms | 1 GetItem (revoke check) + 1 GetItem (sticky) + 1 BatchGetItem (totals) |
-| Cost submission | < 75ms | 1 GetItem (revoke check) + 1 UpdateItem (counter) + 1 GetItem (DailyTotal) |
-| Daily aggregate query | < 220ms | 1 GetItem (revoke check) + 1 GetItem (config) + 1 BatchGetItem (totals) |
-| Secret retrieval | < 100ms | 1 GetItem (token) + 1 UpdateItem (mark used) + 1 GetItem (config) |
-
-### Throughput Limits
-
-**Per org/app:**
-- Cost submissions: ~5,000 req/s (limited by shard count)
-- Model selection: ~10,000 req/s (read-heavy, cacheable)
-
-**System-wide:**
-- Unlimited (horizontally scalable via ECS tasks)
-
----
-
 ## Monitoring & Observability
 
 ### DynamoDB Metrics
@@ -1109,18 +1083,3 @@ UpdateItem: StickyState
 
 ---
 
-## Summary
-
-This DynamoDB schema provides:
-
-✅ **Scalable writes**: Distributed across N sharded counters
-✅ **Efficient reads**: Single item for quota checks via aggregation
-✅ **No hot partitions**: Sharding + controlled update cadence
-✅ **Multi-instance safe**: Atomic operations, no coordination needed
-✅ **Cost efficient**: ~$8.77/month for 10 req/s workload (with caching)
-✅ **N-model support**: Label-based keys, unlimited model count
-✅ **Org/App scoping**: Flexible hierarchy without user complexity
-✅ **Eventual consistency**: Acceptable 60s aggregation lag
-✅ **Security**: JWT token revocation, credential rotation, one-time secret retrieval
-✅ **Idempotency**: Request deduplication via DynamoDB sets or separate table
-✅ **Real-time feedback**: Cost submissions return current DailyTotal for mode detection

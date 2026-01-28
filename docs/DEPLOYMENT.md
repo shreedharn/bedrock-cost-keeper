@@ -682,6 +682,20 @@ Before going to production, complete these steps:
 
 ## Cost Estimation
 
+> **⚠️ COST DISCLAIMER**
+>
+> All cost estimates provided below are for **illustrative purposes only** and must be verified against current AWS pricing. Actual costs may vary significantly based on:
+> - Usage patterns, traffic volume, and data transfer
+> - AWS region (estimates below are for US East 1)
+> - Current AWS pricing (subject to change without notice)
+> - Resource configuration and optimization strategies
+> - Free tier eligibility
+> **Always:**
+> - Validate calculations with the [AWS Pricing Calculator](https://calculator.aws/)
+> - Monitor actual costs using AWS Cost Explorer
+> - Set up billing alerts before deployment
+> - Conduct your own detailed cost analysis for your specific use case
+
 ### Monthly Cost Breakdown (US East 1)
 
 **ECS Fargate** (2 tasks @ 0.5 vCPU, 1 GB memory):

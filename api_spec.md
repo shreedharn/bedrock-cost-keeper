@@ -18,6 +18,9 @@ The Bedrock Cost Keeper REST API provides endpoints for managing organization an
 3. [Error Responses](#error-responses)
 4. [Rate Limiting](#rate-limiting)
 5. [Endpoints](#endpoints)
+   - [Health & Status](#health--status)
+     - [Health Check](#get-health)
+     - [Root Endpoint](#get-)
    - [Authentication Endpoints](#authentication)
      - [Token Issuance](#post-authtoken)
      - [Token Refresh](#post-authrefresh)
@@ -283,6 +286,8 @@ API requests are rate-limited per client_id (extracted from JWT token).
 
 | Endpoint | Rate Limit | Identifier |
 |----------|-----------|------------|
+| `GET /health` | No limit | None (public) |
+| `GET /` | No limit | None (public) |
 | `POST /auth/token` | 10 requests/minute | client_id |
 | `POST /auth/refresh` | 30 requests/minute | client_id |
 | `PUT /orgs/{org_id}` | 10 requests/hour | API key |
@@ -291,6 +296,7 @@ API requests are rate-limited per client_id (extracted from JWT token).
 | `GET /aggregates/*` | 60 requests/minute | client_id |
 | `GET /model-selection` | 120 requests/minute | client_id |
 | `POST /costs` | 1000 requests/minute | client_id |
+| `POST /costs/batch` | 100 requests/minute | client_id |
 
 **Rate Limit Headers:**
 ```
@@ -313,6 +319,85 @@ When rate limit exceeded:
 ---
 
 ## Endpoints
+
+## Health & Status
+
+### GET /health
+
+Health check endpoint for monitoring and load balancer health checks.
+
+**Authentication:** None required (public endpoint)
+
+**Request:** No parameters
+
+**Response: 200 OK** (Healthy)
+
+```json
+{
+  "status": "healthy",
+  "service": "bedrock-cost-keeper",
+  "version": "1.0.0",
+  "timestamp": "2026-01-23T15:30:45Z",
+  "database": {
+    "status": "connected",
+    "latency_ms": 12
+  }
+}
+```
+
+**Response: 503 Service Unavailable** (Unhealthy)
+
+```json
+{
+  "status": "unhealthy",
+  "service": "bedrock-cost-keeper",
+  "version": "1.0.0",
+  "timestamp": "2026-01-23T15:30:45Z",
+  "database": {
+    "status": "disconnected",
+    "error": "Connection timeout"
+  }
+}
+```
+
+**Use Cases:**
+- Load balancer health checks (ALB target group)
+- Monitoring system probes
+- Container orchestration health checks (ECS)
+- Pre-deployment validation
+
+---
+
+### GET /
+
+Root endpoint returning service information.
+
+**Authentication:** None required (public endpoint)
+
+**Request:** No parameters
+
+**Response: 200 OK**
+
+```json
+{
+  "service": "bedrock-cost-keeper",
+  "version": "1.0.0",
+  "description": "Bedrock model cost tracking and intelligent model selection service",
+  "documentation": "https://github.com/your-org/bedrock-cost-keeper/blob/main/api_spec.md",
+  "endpoints": {
+    "authentication": "/auth/token",
+    "health": "/health",
+    "api": "/api/v1"
+  }
+}
+```
+
+**Use Cases:**
+- Service discovery
+- API version verification
+- Quick connectivity test
+
+---
 
 ## Authentication
 
@@ -1430,9 +1515,17 @@ curl -X POST https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e
   }'
 ```
 
-**Batch Submission:**
+---
 
-For high-throughput applications, batch submission is recommended:
+### POST /orgs/{org_id}/apps/{app_id}/costs/batch
+
+Submit multiple request costs in a single API call for high-throughput applications.
+
+**Path Parameters:**
+- `org_id` (string, required) - Organization UUID
+- `app_id` (string, required) - Application identifier
+
+**Request Body:**
 
 ```json
 {
@@ -1440,18 +1533,33 @@ For high-throughput applications, batch submission is recommended:
     {
       "request_id": "uuid-1",
       "model_label": "premium",
-      ...
+      "bedrock_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      "input_tokens": 1500,
+      "output_tokens": 800,
+      "cost_usd_micros": 15750,
+      "status": "OK",
+      "timestamp": "2026-01-23T15:30:45Z"
     },
     {
       "request_id": "uuid-2",
       "model_label": "standard",
-      ...
+      "bedrock_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+      "input_tokens": 1200,
+      "output_tokens": 600,
+      "cost_usd_micros": 3600,
+      "status": "OK",
+      "timestamp": "2026-01-23T15:30:46Z"
     }
   ]
 }
 ```
 
-**Batch Response: 207 Multi-Status**
+**Validation:**
+- Each request in the array must satisfy the same validation rules as single submission
+- Maximum 100 requests per batch
+- All requests must be for the same org_id and app_id
+
+**Response: 207 Multi-Status**
 
 ```json
 {
@@ -1460,7 +1568,8 @@ For high-throughput applications, batch submission is recommended:
   "results": [
     {
       "request_id": "uuid-1",
-      "status": "accepted"
+      "status": "accepted",
+      "shard_id": 3
     },
     {
       "request_id": "uuid-2",
@@ -1470,6 +1579,33 @@ For high-throughput applications, batch submission is recommended:
   ],
   "timestamp": "2026-01-23T15:30:45Z"
 }
+```
+
+**Benefits:**
+- Reduced network overhead (fewer HTTP requests)
+- Lower rate limit consumption (1 API call instead of N)
+- More efficient for high-volume cost submission
+
+**Example Request:**
+
+```bash
+curl -X POST https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/costs/batch \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  --data '{
+    "requests": [
+      {
+        "request_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "model_label": "premium",
+        "bedrock_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "input_tokens": 1500,
+        "output_tokens": 800,
+        "cost_usd_micros": 15750,
+        "status": "OK",
+        "timestamp": "2026-01-23T15:30:45Z"
+      }
+    ]
+  }'
 ```
 
 ---
