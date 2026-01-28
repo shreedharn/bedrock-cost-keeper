@@ -1,0 +1,318 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS Cluster, Service, and Task Definition for Bedrock Cost Keeper'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where ECS tasks will run
+
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of private subnet IDs for ECS tasks (must be in different AZs)
+
+  ECRStackName:
+    Type: String
+    Description: Name of the ECR stack for repository URI
+
+  IAMStackName:
+    Type: String
+    Description: Name of the IAM stack for role ARNs
+
+  SecurityGroupStackName:
+    Type: String
+    Description: Name of the security groups stack
+
+  ALBStackName:
+    Type: String
+    Description: Name of the ALB stack for target group ARN
+
+  DynamoDBStackName:
+    Type: String
+    Description: Name of the DynamoDB stack for table names
+
+  SecretsStackName:
+    Type: String
+    Description: Name of the Secrets stack for secret ARNs
+
+  DesiredCount:
+    Type: Number
+    Description: Desired number of ECS tasks
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+
+  CPU:
+    Type: String
+    Description: Task CPU units (256, 512, 1024, 2048, 4096)
+    Default: '512'
+    AllowedValues:
+      - '256'
+      - '512'
+      - '1024'
+      - '2048'
+      - '4096'
+
+  Memory:
+    Type: String
+    Description: Task memory in MB
+    Default: '1024'
+    AllowedValues:
+      - '512'
+      - '1024'
+      - '2048'
+      - '4096'
+      - '8192'
+
+Resources:
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/bedrock-cost-keeper-${Environment}'
+      RetentionInDays: 30
+
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'bedrock-cost-keeper-${Environment}'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub 'bedrock-cost-keeper-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'bedrock-cost-keeper-${Environment}'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref CPU
+      Memory: !Ref Memory
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${IAMStackName}-ECSTaskExecutionRoleArn'
+      TaskRoleArn:
+        Fn::ImportValue: !Sub '${IAMStackName}-ECSTaskRoleArn'
+      ContainerDefinitions:
+        - Name: bedrock-cost-keeper
+          Image:
+            Fn::Sub:
+              - '${RepositoryUri}:latest'
+              - RepositoryUri:
+                  Fn::ImportValue: !Sub '${ECRStackName}-RepositoryUri'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8000
+              Protocol: tcp
+          Environment:
+            - Name: HOST
+              Value: '0.0.0.0'
+            - Name: PORT
+              Value: '8000'
+            - Name: DEBUG
+              Value: 'false'
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: DYNAMODB_CONFIG_TABLE
+              Value:
+                Fn::ImportValue: !Sub '${DynamoDBStackName}-ConfigTableName'
+            - Name: DYNAMODB_STICKY_STATE_TABLE
+              Value:
+                Fn::ImportValue: !Sub '${DynamoDBStackName}-StickyStateTableName'
+            - Name: DYNAMODB_USAGE_AGG_SHARDED_TABLE
+              Value:
+                Fn::ImportValue: !Sub '${DynamoDBStackName}-UsageAggShardedTableName'
+            - Name: DYNAMODB_DAILY_TOTAL_TABLE
+              Value:
+                Fn::ImportValue: !Sub '${DynamoDBStackName}-DailyTotalTableName'
+            - Name: DYNAMODB_PRICING_CACHE_TABLE
+              Value:
+                Fn::ImportValue: !Sub '${DynamoDBStackName}-PricingCacheTableName'
+            - Name: DYNAMODB_TOKENS_TABLE
+              Value:
+                Fn::ImportValue: !Sub '${DynamoDBStackName}-TokensTableName'
+            - Name: DYNAMODB_SECRETS_TABLE
+              Value:
+                Fn::ImportValue: !Sub '${DynamoDBStackName}-SecretsTableName'
+          Secrets:
+            - Name: JWT_SECRET_KEY
+              ValueFrom:
+                Fn::ImportValue: !Sub '${SecretsStackName}-JWTSecretArn'
+            - Name: PROVISIONING_API_KEY
+              ValueFrom:
+                Fn::ImportValue: !Sub '${SecretsStackName}-ProvisioningAPISecretArn'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost:8000/health || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub 'bedrock-cost-keeper-${Environment}'
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${SecurityGroupStackName}-ECSSecurityGroupId'
+      LoadBalancers:
+        - ContainerName: bedrock-cost-keeper
+          ContainerPort: 8000
+          TargetGroupArn:
+            Fn::ImportValue: !Sub '${ALBStackName}-TargetGroupArn'
+      HealthCheckGracePeriodSeconds: 60
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'bedrock-cost-keeper-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # Auto Scaling Target
+  AutoScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 10
+      MinCapacity: 1
+      ResourceId: !Sub 'service/${ECSCluster}/${ECSService.Name}'
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  # CPU Auto Scaling Policy
+  CPUScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub 'bedrock-cost-keeper-cpu-scaling-${Environment}'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # Memory Auto Scaling Policy
+  MemoryScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub 'bedrock-cost-keeper-memory-scaling-${Environment}'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageMemoryUtilization
+        TargetValue: 80.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # Request Count Auto Scaling Policy
+  RequestCountScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub 'bedrock-cost-keeper-request-scaling-${Environment}'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Sub
+            - '${ALBFullName}/${TargetGroupFullName}'
+            - ALBFullName:
+                Fn::Select:
+                  - 1
+                  - Fn::Split:
+                      - 'loadbalancer/'
+                      - Fn::ImportValue: !Sub '${ALBStackName}-ALBArn'
+              TargetGroupFullName:
+                Fn::Select:
+                  - 1
+                  - Fn::Split:
+                      - ':'
+                      - Fn::ImportValue: !Sub '${ALBStackName}-TargetGroupArn'
+        TargetValue: 1000.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+Outputs:
+  ClusterArn:
+    Description: ARN of the ECS cluster
+    Value: !GetAtt ECSCluster.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterArn'
+
+  ClusterName:
+    Description: Name of the ECS cluster
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterName'
+
+  ServiceArn:
+    Description: ARN of the ECS service
+    Value: !Ref ECSService
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceArn'
+
+  ServiceName:
+    Description: Name of the ECS service
+    Value: !GetAtt ECSService.Name
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceName'
+
+  TaskDefinitionArn:
+    Description: ARN of the task definition
+    Value: !Ref TaskDefinition
+    Export:
+      Name: !Sub '${AWS::StackName}-TaskDefinitionArn'
+
+  LogGroupName:
+    Description: Name of the CloudWatch log group
+    Value: !Ref LogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LogGroupName'

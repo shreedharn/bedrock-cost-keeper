@@ -1,0 +1,283 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DynamoDB tables for Bedrock Cost Keeper'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+  TablePrefix:
+    Type: String
+    Description: Prefix for DynamoDB table names
+    Default: bedrock-cost-keeper
+
+Resources:
+  # 1. Configuration table for organizations and applications
+  ConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${TablePrefix}-config-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # 2. Sticky state table for model fallback tracking
+  StickyStateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${TablePrefix}-sticky-state-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # 3. Sharded usage aggregation table for high-throughput counters
+  UsageAggShardedTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${TablePrefix}-usage-agg-sharded-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # 4. Daily totals aggregation table
+  DailyTotalTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${TablePrefix}-daily-total-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # 5. Pricing cache table for model pricing data
+  PricingCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${TablePrefix}-pricing-cache-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # 6. Revoked tokens table with TTL
+  TokensTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${TablePrefix}-tokens-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at_epoch
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # 7. Secrets table for secret retrieval tokens with TTL
+  SecretsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${TablePrefix}-secrets-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at_epoch
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+Outputs:
+  ConfigTableName:
+    Description: Name of the configuration table
+    Value: !Ref ConfigTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigTableName'
+
+  ConfigTableArn:
+    Description: ARN of the configuration table
+    Value: !GetAtt ConfigTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigTableArn'
+
+  StickyStateTableName:
+    Description: Name of the sticky state table
+    Value: !Ref StickyStateTable
+    Export:
+      Name: !Sub '${AWS::StackName}-StickyStateTableName'
+
+  StickyStateTableArn:
+    Description: ARN of the sticky state table
+    Value: !GetAtt StickyStateTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-StickyStateTableArn'
+
+  UsageAggShardedTableName:
+    Description: Name of the usage aggregation sharded table
+    Value: !Ref UsageAggShardedTable
+    Export:
+      Name: !Sub '${AWS::StackName}-UsageAggShardedTableName'
+
+  UsageAggShardedTableArn:
+    Description: ARN of the usage aggregation sharded table
+    Value: !GetAtt UsageAggShardedTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-UsageAggShardedTableArn'
+
+  DailyTotalTableName:
+    Description: Name of the daily total table
+    Value: !Ref DailyTotalTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DailyTotalTableName'
+
+  DailyTotalTableArn:
+    Description: ARN of the daily total table
+    Value: !GetAtt DailyTotalTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DailyTotalTableArn'
+
+  PricingCacheTableName:
+    Description: Name of the pricing cache table
+    Value: !Ref PricingCacheTable
+    Export:
+      Name: !Sub '${AWS::StackName}-PricingCacheTableName'
+
+  PricingCacheTableArn:
+    Description: ARN of the pricing cache table
+    Value: !GetAtt PricingCacheTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-PricingCacheTableArn'
+
+  TokensTableName:
+    Description: Name of the tokens table
+    Value: !Ref TokensTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TokensTableName'
+
+  TokensTableArn:
+    Description: ARN of the tokens table
+    Value: !GetAtt TokensTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TokensTableArn'
+
+  SecretsTableName:
+    Description: Name of the secrets table
+    Value: !Ref SecretsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-SecretsTableName'
+
+  SecretsTableArn:
+    Description: ARN of the secrets table
+    Value: !GetAtt SecretsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SecretsTableArn'

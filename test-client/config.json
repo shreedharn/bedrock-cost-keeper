@@ -1,0 +1,9 @@
+{
+  "service_url": "https://bedrock-cost-keeper-dev.example.com",
+  "client_id": "REPLACE_WITH_CLIENT_ID_FROM_SEED_SCRIPT",
+  "client_secret": "REPLACE_WITH_CLIENT_SECRET_FROM_SEED_SCRIPT",
+  "org_id": "REPLACE_WITH_ORG_ID_FROM_SEED_SCRIPT",
+  "app_id": "test-app",
+  "aws_region": "us-east-1",
+  "test_prompt": "What is the capital of France? Respond in one sentence."
+}

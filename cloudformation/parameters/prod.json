@@ -1,0 +1,66 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "prod"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "vpc-XXXXXXXXXXXXXXXXX"
+  },
+  {
+    "ParameterKey": "PublicSubnetIds",
+    "ParameterValue": "subnet-XXXXXXXXXXXXXXXXX,subnet-YYYYYYYYYYYYYYYYY,subnet-BBBBBBBBBBBBBBBBBB"
+  },
+  {
+    "ParameterKey": "PrivateSubnetIds",
+    "ParameterValue": "subnet-ZZZZZZZZZZZZZZZZZ,subnet-AAAAAAAAAAAAAAAAAA,subnet-CCCCCCCCCCCCCCCCCC"
+  },
+  {
+    "ParameterKey": "CertificateArn",
+    "ParameterValue": "arn:aws:acm:us-east-1:123456789012:certificate/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+  },
+  {
+    "ParameterKey": "GitHubOwner",
+    "ParameterValue": "your-github-org"
+  },
+  {
+    "ParameterKey": "GitHubRepo",
+    "ParameterValue": "bedrock_metering"
+  },
+  {
+    "ParameterKey": "GitHubBranch",
+    "ParameterValue": "main"
+  },
+  {
+    "ParameterKey": "GitHubConnectionArn",
+    "ParameterValue": "arn:aws:codestar-connections:us-east-1:123456789012:connection/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+  },
+  {
+    "ParameterKey": "JWTSecretKey",
+    "ParameterValue": "CHANGE_ME_GENERATED_BY_CREATE_SECRETS_SCRIPT"
+  },
+  {
+    "ParameterKey": "ProvisioningAPIKey",
+    "ParameterValue": "CHANGE_ME_GENERATED_BY_CREATE_SECRETS_SCRIPT"
+  },
+  {
+    "ParameterKey": "DesiredCount",
+    "ParameterValue": "3"
+  },
+  {
+    "ParameterKey": "CPU",
+    "ParameterValue": "1024"
+  },
+  {
+    "ParameterKey": "Memory",
+    "ParameterValue": "2048"
+  },
+  {
+    "ParameterKey": "TemplatesBucketName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "TemplatesBucketPrefix",
+    "ParameterValue": "cloudformation/stacks"
+  }
+]

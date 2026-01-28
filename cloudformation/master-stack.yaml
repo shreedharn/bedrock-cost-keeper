@@ -1,0 +1,313 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Master stack for Bedrock Cost Keeper - Orchestrates all infrastructure components'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing VPC ID where resources will be deployed
+
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of existing public subnet IDs for ALB (must be in different AZs)
+
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of existing private subnet IDs for ECS tasks (must be in different AZs)
+
+  CertificateArn:
+    Type: String
+    Description: ARN of ACM certificate for HTTPS listener
+
+  GitHubOwner:
+    Type: String
+    Description: GitHub repository owner/organization
+
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository name
+    Default: bedrock_metering
+
+  GitHubBranch:
+    Type: String
+    Description: GitHub branch to deploy
+    Default: main
+
+  GitHubConnectionArn:
+    Type: String
+    Description: ARN of AWS CodeStar connection to GitHub
+
+  JWTSecretKey:
+    Type: String
+    Description: Base64-encoded JWT secret key (32 bytes)
+    NoEcho: true
+
+  ProvisioningAPIKey:
+    Type: String
+    Description: Base64-encoded provisioning API key (32 bytes)
+    NoEcho: true
+
+  DesiredCount:
+    Type: Number
+    Description: Desired number of ECS tasks
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+
+  CPU:
+    Type: String
+    Description: Task CPU units
+    Default: '512'
+    AllowedValues:
+      - '256'
+      - '512'
+      - '1024'
+      - '2048'
+      - '4096'
+
+  Memory:
+    Type: String
+    Description: Task memory in MB
+    Default: '1024'
+    AllowedValues:
+      - '512'
+      - '1024'
+      - '2048'
+      - '4096'
+      - '8192'
+
+  TemplatesBucketName:
+    Type: String
+    Description: S3 bucket name where CloudFormation templates are stored
+    Default: ''
+
+  TemplatesBucketPrefix:
+    Type: String
+    Description: S3 key prefix for CloudFormation templates
+    Default: 'cloudformation/stacks'
+
+Conditions:
+  UseS3Templates: !Not [!Equals [!Ref TemplatesBucketName, '']]
+
+Resources:
+  # Stack 1: DynamoDB Tables
+  DynamoDBStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !If
+        - UseS3Templates
+        - !Sub 'https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatesBucketPrefix}/01-dynamodb.yaml'
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucketName}/${TemplatesBucketPrefix}/01-dynamodb.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        TablePrefix: bedrock-cost-keeper
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # Stack 2: Secrets Manager
+  SecretsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !If
+        - UseS3Templates
+        - !Sub 'https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatesBucketPrefix}/02-secrets.yaml'
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucketName}/${TemplatesBucketPrefix}/02-secrets.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        JWTSecretKey: !Ref JWTSecretKey
+        ProvisioningAPIKey: !Ref ProvisioningAPIKey
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # Stack 3: ECR Repository
+  ECRStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !If
+        - UseS3Templates
+        - !Sub 'https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatesBucketPrefix}/03-ecr.yaml'
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucketName}/${TemplatesBucketPrefix}/03-ecr.yaml'
+      Parameters:
+        Environment: !Ref Environment
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # Stack 4: IAM Roles
+  IAMStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - DynamoDBStack
+      - SecretsStack
+      - ECRStack
+    Properties:
+      TemplateURL: !If
+        - UseS3Templates
+        - !Sub 'https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatesBucketPrefix}/04-iam.yaml'
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucketName}/${TemplatesBucketPrefix}/04-iam.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        DynamoDBStackName: !GetAtt DynamoDBStack.Outputs.StackName
+        SecretsStackName: !GetAtt SecretsStack.Outputs.StackName
+        ECRStackName: !GetAtt ECRStack.Outputs.StackName
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # Stack 5: Security Groups
+  SecurityGroupsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !If
+        - UseS3Templates
+        - !Sub 'https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatesBucketPrefix}/05-security-groups.yaml'
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucketName}/${TemplatesBucketPrefix}/05-security-groups.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        VpcId: !Ref VpcId
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # Stack 6: Application Load Balancer
+  ALBStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - SecurityGroupsStack
+    Properties:
+      TemplateURL: !If
+        - UseS3Templates
+        - !Sub 'https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatesBucketPrefix}/06-alb.yaml'
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucketName}/${TemplatesBucketPrefix}/06-alb.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        VpcId: !Ref VpcId
+        PublicSubnetIds: !Join [',', !Ref PublicSubnetIds]
+        SecurityGroupStackName: !GetAtt SecurityGroupsStack.Outputs.StackName
+        CertificateArn: !Ref CertificateArn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # Stack 7: ECS Cluster and Service
+  ECSStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - IAMStack
+      - SecurityGroupsStack
+      - ALBStack
+    Properties:
+      TemplateURL: !If
+        - UseS3Templates
+        - !Sub 'https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatesBucketPrefix}/07-ecs.yaml'
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucketName}/${TemplatesBucketPrefix}/07-ecs.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        VpcId: !Ref VpcId
+        PrivateSubnetIds: !Join [',', !Ref PrivateSubnetIds]
+        ECRStackName: !GetAtt ECRStack.Outputs.StackName
+        IAMStackName: !GetAtt IAMStack.Outputs.StackName
+        SecurityGroupStackName: !GetAtt SecurityGroupsStack.Outputs.StackName
+        ALBStackName: !GetAtt ALBStack.Outputs.StackName
+        DynamoDBStackName: !GetAtt DynamoDBStack.Outputs.StackName
+        SecretsStackName: !GetAtt SecretsStack.Outputs.StackName
+        DesiredCount: !Ref DesiredCount
+        CPU: !Ref CPU
+        Memory: !Ref Memory
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  # Stack 8: CI/CD Pipeline
+  CodePipelineStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - ECRStack
+      - IAMStack
+      - ECSStack
+    Properties:
+      TemplateURL: !If
+        - UseS3Templates
+        - !Sub 'https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatesBucketPrefix}/08-codepipeline.yaml'
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucketName}/${TemplatesBucketPrefix}/08-codepipeline.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        GitHubOwner: !Ref GitHubOwner
+        GitHubRepo: !Ref GitHubRepo
+        GitHubBranch: !Ref GitHubBranch
+        GitHubConnectionArn: !Ref GitHubConnectionArn
+        ECRStackName: !GetAtt ECRStack.Outputs.StackName
+        IAMStackName: !GetAtt IAMStack.Outputs.StackName
+        ECSStackName: !GetAtt ECSStack.Outputs.StackName
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+Outputs:
+  ALBDnsName:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ALBStack.Outputs.ALBDnsName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBDnsName'
+
+  ALBUrl:
+    Description: HTTPS URL of the service
+    Value: !GetAtt ALBStack.Outputs.ALBUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBUrl'
+
+  ClusterArn:
+    Description: ARN of the ECS cluster
+    Value: !GetAtt ECSStack.Outputs.ClusterArn
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterArn'
+
+  ServiceName:
+    Description: Name of the ECS service
+    Value: !GetAtt ECSStack.Outputs.ServiceName
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceName'
+
+  PipelineUrl:
+    Description: URL of the CI/CD pipeline
+    Value: !GetAtt CodePipelineStack.Outputs.PipelineUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineUrl'
+
+  ECRRepositoryUri:
+    Description: URI of the ECR repository
+    Value: !GetAtt ECRStack.Outputs.RepositoryUri
+    Export:
+      Name: !Sub '${AWS::StackName}-ECRRepositoryUri'
+
+  DynamoDBConfigTable:
+    Description: Name of the DynamoDB configuration table
+    Value: !GetAtt DynamoDBStack.Outputs.ConfigTableName
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBConfigTable'

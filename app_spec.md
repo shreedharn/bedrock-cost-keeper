@@ -211,7 +211,7 @@ Refer [API Spec](./api_spec.md)
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ Client Application (NORMAL mode)               │
+│ Client Application (NORMAL mode)                │
 └──────────┬──────────────────────────────────────┘
            │
            ▼
@@ -259,8 +259,8 @@ Refer [API Spec](./api_spec.md)
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ TIGHT mode detected (quota ≥ 95%)              │
-│ Client begins periodic model selection checks  │
+│ TIGHT mode detected (quota ≥ 95%)               │
+│ Client begins periodic model selection checks   │
 └──────────┬──────────────────────────────────────┘
            │
            ▼
@@ -471,39 +471,7 @@ Configuration changes:
 
 ### Shard Count Configuration
 
-Sharded counters prevent hot partitions. Shard count determined by traffic:
-
-| Peak Traffic    | Recommended Shards | Growth Headroom |
-|----------------|--------------------|-----------------|
-| < 50 req/s     | 8                  | 40x growth      |
-| 50-200 req/s   | 16                 | 20x growth      |
-| 200-500 req/s  | 32                 | 10x growth      |
-| > 500 req/s    | 64                 | 5x growth       |
-
-**Configuration**: Set in `config_<org_name>.yaml` under `overrides.agg_shard_count`
-
-**Important**: Shard count immutable per org (set at creation)
-
----
-
-## Cost Estimation
-
-### DynamoDB Costs (10 req/s workload)
-
-| Component          | Operations           | Monthly Cost |
-|--------------------|---------------------|--------------|
-| Aggregator reads   | 8 shards × 43,200   | $0.09        |
-| Quota checks       | ~4.3M reads         | $1.08        |
-| Cost submissions   | ~25.9M writes       | $0.32        |
-| Storage           | < 1 GB              | < $0.25      |
-| **Total DynamoDB** |                     | **~$1.74**   |
-
-### ECS Fargate Costs
-
-- 0.25 vCPU, 0.5 GB memory: ~$8/month per task
-- Typical deployment: 2 tasks (HA) = **$16/month**
-
-**Total system cost**: ~$18/month for 10 req/s workload
+Sharded counters prevent hot partitions. Start evaluating with 8 Shards.
 
 ---
 

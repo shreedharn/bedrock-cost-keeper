@@ -31,6 +31,7 @@ dist/
 downloads/
 eggs/
 .eggs/
+htmlcov/
 lib/
 lib64/
 parts/
@@ -90,3 +91,15 @@ credentials.json
 *.key
 *.cert
 *.crt
+*_test_*.txt
+
+# CloudFormation
+cloudformation/parameters/*-local.json
+cloudformation/parameters/*-secrets.json
+
+# Test outputs
+test_output/
+test_results/
+
+*_TESTING.md
+*_SUMMARY.md
