@@ -20,9 +20,9 @@ The integration tests use:
 ```
 
 This will:
-- ✅ Start DynamoDB Local in Docker
-- ✅ Create all required tables
-- ✅ Seed test data (test org and app)
+- Start DynamoDB Local in Docker
+- Create all required tables
+- Seed test data (test org and app)
 
 ### 2. Run Integration Tests
 
@@ -180,21 +180,21 @@ pytest tests/ -v
 ### What's Tested
 
 1. **Cost Submission**
-   - ✅ Single cost submission to DynamoDB
-   - ✅ Batch cost submission
-   - ✅ Data persistence verification
-   - ✅ Idempotency (duplicate request_id)
-   - ✅ Multiple model support
+   - Single cost submission to DynamoDB
+   - Batch cost submission
+   - Data persistence verification
+   - Idempotency (duplicate request_id)
+   - Multiple model support
 
 2. **Aggregation**
-   - ✅ Daily aggregate updates
-   - ✅ Multi-model aggregation
-   - ✅ Aggregate retrieval API
+   - Daily aggregate updates
+   - Multi-model aggregation
+   - Aggregate retrieval API
 
 3. **Data Integrity**
-   - ✅ Correct data format in DynamoDB
-   - ✅ All required fields present
-   - ✅ Proper partition/sort key structure
+   - Correct data format in DynamoDB
+   - All required fields present
+   - Proper partition/sort key structure
 
 ### Test Fixtures
 
@@ -207,9 +207,9 @@ pytest tests/ -v
 ### Test Data Cleanup
 
 Each test automatically clears usage and aggregates data (not config) before running. This ensures:
-- ✅ Clean state for each test
-- ✅ No interference between tests
-- ✅ Predictable test results
+- Clean state for each test
+- No interference between tests
+- Predictable test results
 
 ---
 
@@ -452,11 +452,11 @@ Use `-m integration` to run only integration tests or `-m "not integration"` to 
 
 ## Next Steps
 
-1. ✅ Run the setup: `./scripts/dynamodb.sh setup`
-2. ✅ Run tests: `./scripts/dynamodb.sh test`
-3. ✅ Inspect data: `./scripts/dynamodb.sh scan bedrock-cost-keeper-usage`
-4. ✅ Write your own integration tests
-5. ✅ Stop when done: `./scripts/dynamodb.sh stop`
+1. Run the setup: `./scripts/dynamodb.sh setup`
+2. Run tests: `./scripts/dynamodb.sh test`
+3. Inspect data: `./scripts/dynamodb.sh scan bedrock-cost-keeper-usage`
+4. Write your own integration tests
+5. Stop when done: `./scripts/dynamodb.sh stop`
 
 ---
 

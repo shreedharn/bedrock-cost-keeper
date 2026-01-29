@@ -501,15 +501,15 @@ Sharded counters prevent hot partitions. Start evaluating with 8 Shards.
 
 The Bedrock Price Keeper is a **client-driven, eventually consistent, REST-based** metering service that:
 
-✅ Supports N models with label-based configuration
-✅ Operates at organization or application scope
-✅ Provides intelligent fallback chains
-✅ Prevents hot DynamoDB partitions through sharding
-✅ Scales horizontally on ECS Fargate
-✅ Offers simple REST API for integration
-✅ Maintains cost efficiency (~$18/month at 10 req/s)*
-✅ Provides eventual consistency with acceptable overrun
+- Supports N models with label-based configuration
+- Operates at organization or application scope
+- Provides intelligent fallback chains
+- Prevents hot DynamoDB partitions through sharding
+- Scales horizontally on ECS Fargate
+- Offers simple REST API for integration
+- Maintains cost efficiency 
+- Provides eventual consistency with acceptable overrun
 
-*_Cost estimates are provided for illustrative purposes only and must be verified against current AWS pricing. Actual costs may vary based on usage patterns, region, and AWS pricing changes. Always validate cost calculations with the latest pricing information._
+*_Any cost estimates are provided for illustrative purposes only and must be verified against current AWS pricing. Actual costs may vary based on usage patterns, region, and AWS pricing changes. Always validate cost calculations with the latest pricing information._*
 
 The service acts as a **helper, not enforcer**, allowing applications to make informed model selection decisions while maintaining quota awareness.

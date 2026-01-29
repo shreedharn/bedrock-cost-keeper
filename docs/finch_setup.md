@@ -5,11 +5,10 @@ This guide explains how to use Finch (AWS's open-source container development to
 ## What is Finch?
 
 [Finch](https://github.com/runfinch/finch) is an open-source container development tool from AWS that provides:
-- ✅ **Docker-compatible** CLI and workflow
-- ✅ **Lightweight** - Uses Lima VM on macOS (lighter than Docker Desktop)
-- ✅ **Free and open-source** - Apache 2.0 license
-- ✅ **Native ARM support** - Optimized for Apple Silicon
-- ✅ **No licensing concerns** - Unlike Docker Desktop
+- **Docker-compatible** 
+- **Lightweight** 
+- **Free and open-source** 
+- **Native ARM support** 
 
 ## Installation
 
@@ -103,11 +102,11 @@ finch pull amazon/dynamodb-local:latest
 ## Differences from Docker
 
 ### What's the Same
-- ✅ Same `docker-compose.yml` file
-- ✅ Same commands (`finch` instead of `docker`)
-- ✅ Same images (pulls from Docker Hub)
-- ✅ Same port mappings
-- ✅ Same networking
+- Same `docker-compose.yml` file
+- Same commands (`finch` instead of `docker`)
+- Same images (pulls from Docker Hub)
+- Same port mappings
+- Same networking
 
 ### What's Different
 - Uses `finch compose` instead of `docker compose`
@@ -333,9 +332,6 @@ finch vm ssh                # SSH into VM
 ### Q: Is Finch production-ready?
 **A:** Finch is for local development. Use ECS, EKS, or Fargate for production.
 
-### Q: Can I use Docker and Finch together?
-**A:** Yes, but they use separate VMs and storage. Our script auto-detects which to use.
-
 ### Q: Does Finch work on Windows?
 **A:** Finch primarily targets macOS and Linux. Windows support is experimental.
 
@@ -363,9 +359,9 @@ finch vm stop  # Save resources
 
 ## Next Steps
 
-1. ✅ Install Finch: `brew install --cask finch`
-2. ✅ Initialize VM: `finch vm init`
-3. ✅ Verify: `./scripts/dynamodb.sh runtime`
-4. ✅ Run tests: `./scripts/dynamodb.sh setup && ./scripts/dynamodb.sh test`
+1. Install Finch: `brew install --cask finch`
+2. Initialize VM: `finch vm init`
+3. Verify: `./scripts/dynamodb.sh runtime`
+4. Run tests: `./scripts/dynamodb.sh setup && ./scripts/dynamodb.sh test`
 
-The script will automatically use Finch - no configuration needed! 🚀
+The script will automatically use Finch - no configuration needed!

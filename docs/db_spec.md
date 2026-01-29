@@ -923,7 +923,7 @@ Shard count is **immutable per org** - set at creation, cannot change without da
 
 ## Cost Analysis (10 req/s workload)
 
-> **⚠️ COST DISCLAIMER**
+> **COST DISCLAIMER**
 >
 > All cost estimates provided in this section are for **illustrative purposes only** and must be verified against current AWS pricing. Actual costs may vary significantly based on:
 > - Usage patterns and traffic volume

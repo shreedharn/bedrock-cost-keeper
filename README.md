@@ -6,11 +6,10 @@ A REST service that helps applications manage Amazon Bedrock model costs through
 
 Bedrock Cost Keeper is a **client-driven, eventually consistent REST service** that enables applications to:
 
-- 📊 Track and aggregate Amazon Bedrock usage costs in real-time
-- 🎯 Select models intelligently based on daily budget quotas
-- 🔄 Automatically fallback to cost-effective alternatives when quotas are exceeded
-- 🏢 Support multi-tenant organizations with flexible quota scoping
-- 📈 Provide usage analytics and cost visibility
+- Track and aggregate Amazon Bedrock usage costs in real-time
+- Select models intelligently based on daily budget quotas
+- Support multi-tenant organizations with flexible quota scoping
+- Provide usage analytics and cost visibility
 
 **Key Principle**: This is a **helper service, not an enforcer**. Applications make their own decisions about which Bedrock models to use, with the service providing recommendations based on quota awareness.
 
@@ -28,15 +27,15 @@ Bedrock Cost Keeper solves these challenges with a lightweight, scalable service
 ## Architecture Overview
 
 ```
-┌─────────────────┐
-│  Application    │
-│                 │
-│  1. Get model   │◄──┐
-│  2. Call Bedrock│   │
-│  3. Submit cost │   │  REST API
-└────────┬────────┘   │
-         │            │
-         ▼            │
+┌─────────────────-----┐
+│  Application         │
+│                      │
+│  1. Get model config │◄──┐
+│  2. Call Bedrock     │   │
+│  3. Submit cost      │   │ REST API
+└────────┬────────-----┘   │
+         │                 │
+         ▼                 │
 ┌──────────────────────────────┐
 │  Bedrock Cost Keeper Service │
 │  ┌────────────────────────┐  │
@@ -44,7 +43,7 @@ Bedrock Cost Keeper solves these challenges with a lightweight, scalable service
 │  └────────┬───────────────┘  │
 │           │                  │
 │  ┌────────▼───────────────┐  │
-│  │  DynamoDB (7 tables)   │  │
+│  │  DynamoDB              │  │
 │  │  - Config              │  │
 │  │  - Usage Aggregates    │  │
 │  │  - Daily Totals        │  │
@@ -53,29 +52,31 @@ Bedrock Cost Keeper solves these challenges with a lightweight, scalable service
 └──────────────────────────────┘
 ```
 
+For detailed client integration flow diagrams including Normal Mode and Tight Mode operation, see [Client Integration Flow](./docs/app_spec.md#client-integration-flow).
+
 ## Core Features
 
-### 🎯 Intelligent Model Selection
+### Intelligent Model Selection
 - Recommends Bedrock models based on current quota status
 - Automatic fallback to cheaper alternatives when budgets exceeded
 - Sticky fallback prevents oscillation between models
 
-### 📊 Real-time Cost Tracking
+### Real-time Cost Tracking
 - Post-request metering with eventual consistency
 - Sharded aggregation prevents hot DynamoDB partitions
 - Sub-minute aggregation lag
 
-### 🏢 Multi-tenant Support
+### Multi-tenant Support
 - Organization and application hierarchy
 - Flexible quota scoping (org-wide or per-app)
 - Independent configurations per tenant
 
-### 🔐 Secure Authentication
+### Secure Authentication
 - JWT-based authentication (OAuth2 client credentials)
 - Token revocation support
 - Credential rotation with grace periods
 
-### 📈 Usage Analytics
+### Usage Analytics
 - Daily and historical usage queries
 - Cost breakdown by model and application
 - Real-time quota status
@@ -83,7 +84,7 @@ Bedrock Cost Keeper solves these challenges with a lightweight, scalable service
 ## Goals
 
 1. **Cost Efficiency**: Enable organizations to optimize Bedrock spending through intelligent model selection
-2. **Scalability**: Handle high-throughput workloads (1000s of requests/second) with minimal infrastructure cost
+2. **Scalability**: Handle high-throughput workloads with minimal infrastructure cost
 3. **Simplicity**: Provide a simple REST API that integrates easily into existing applications
 4. **Reliability**: Eventual consistency with acceptable overrun tolerance (<5% of quota)
 5. **Flexibility**: Support N models with label-based configuration for easy model upgrades
@@ -345,8 +346,8 @@ See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for detailed cost breakdown.
 
 ## Security
 - JWT-based authentication with token revocation
-- Credential rotation with zero-downtime grace periods
-- One-time secret retrieval tokens (10-minute expiry)
+- Credential rotation 
+- One-time secret retrieval tokens with expiry
 - All data encrypted at rest (DynamoDB, Secrets Manager)
 - Private subnet deployment (no public IPs for tasks)
 - HTTPS-only API (enforced by ALB)
@@ -356,7 +357,6 @@ See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for detailed cost breakdown.
 
 - Follow PEP 8 style guide
 - Write docstrings for all public functions
-- Maintain test coverage above 80%
 - Update documentation for API changes
 - Add integration tests for new endpoints
 

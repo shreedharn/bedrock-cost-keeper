@@ -682,7 +682,7 @@ Before going to production, complete these steps:
 
 ## Cost Estimation
 
-> **⚠️ COST DISCLAIMER**
+> **COST DISCLAIMER**
 >
 > All cost estimates provided below are for **illustrative purposes only** and must be verified against current AWS pricing. Actual costs may vary significantly based on:
 > - Usage patterns, traffic volume, and data transfer

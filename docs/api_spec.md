@@ -5,7 +5,7 @@
 The Bedrock Cost Keeper REST API provides endpoints for managing organization and application configurations, retrieving usage aggregates, selecting models based on quotas, and submitting cost data.
 
 **Version:** v1
-**Base URL:** `https://cost-keeper.{region}.amazonaws.com/api/v1`
+**Base URL:** `https://cost-keeper.<some-domain>.com/api/v1`
 **Protocol:** HTTPS only
 **Authentication:** JWT Bearer Token (Client ID + Client Secret)
 
@@ -59,7 +59,7 @@ Clients authenticate using Client ID and Client Secret (provided during org/app 
 
 ```http
 POST /auth/token HTTP/1.1
-Host: price-keeper.{region}.amazonaws.com
+Host: cost-keeper.<some-domain>.com
 Content-Type: application/json
 
 {
@@ -87,7 +87,7 @@ Include the access token in the Authorization header:
 
 ```http
 GET /api/v1/orgs/{org_id}/apps/{app_id}/model-selection HTTP/1.1
-Host: price-keeper.{region}.amazonaws.com
+Host: cost-keeper.<some-domain>.com
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
@@ -97,7 +97,7 @@ Before access token expires, use refresh token to get new access token:
 
 ```http
 POST /auth/refresh HTTP/1.1
-Host: price-keeper.{region}.amazonaws.com
+Host: cost-keeper.<some-domain>.com
 Content-Type: application/json
 
 {
@@ -695,7 +695,7 @@ X-API-Key: <provisioning-api-key>
 **Example Request:**
 
 ```bash
-curl -X PUT https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000 \
+curl -X PUT https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000 \
   -H "Content-Type: application/json" \
   -H "X-API-Key: <provisioning-api-key>" \
   --data '{
@@ -825,7 +825,7 @@ X-API-Key: <provisioning-api-key>
 **Example Request:**
 
 ```bash
-curl -X PUT https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api \
+curl -X PUT https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api \
   -H "Content-Type: application/json" \
   -H "X-API-Key: <provisioning-api-key>" \
   --data '{
@@ -899,7 +899,7 @@ X-API-Key: <provisioning-api-key>
 **Example Request:**
 
 ```bash
-curl -X POST https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/credentials/rotate \
+curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/credentials/rotate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: <provisioning-api-key>" \
   --data '{"grace_period_hours": 24}'
@@ -1011,7 +1011,7 @@ X-API-Key: <provisioning-api-key>
 **Example Request:**
 
 ```bash
-curl -X GET "https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/credentials/secret?token=7c9e6679-7425-40de-944b-e07fc1f90ae7" \
+curl -X GET "https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/credentials/secret?token=7c9e6679-7425-40de-944b-e07fc1f90ae7" \
   -H "X-API-Key: <provisioning-api-key>"
 ```
 
@@ -1045,7 +1045,7 @@ Same structure as org secret retrieval, with app-specific client_id.
 **Example Request:**
 
 ```bash
-curl -X GET "https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/credentials/secret?token=8d0f7680-8536-51ef-b827-557766551001" \
+curl -X GET "https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/credentials/secret?token=8d0f7680-8536-51ef-b827-557766551001" \
   -H "X-API-Key: <provisioning-api-key>"
 ```
 
@@ -1394,7 +1394,7 @@ while True:
 **Example Request:**
 
 ```bash
-curl -X GET "https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/model-selection?force_check=true" \
+curl -X GET "https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/model-selection?force_check=true" \
   -H "Authorization: Bearer <access_token>"
 ```
 
@@ -1500,7 +1500,7 @@ Submit request cost and usage data for aggregation.
 **Example Request:**
 
 ```bash
-curl -X POST https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/costs \
+curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/costs \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <access_token>" \
   --data '{
@@ -1589,7 +1589,7 @@ Submit multiple request costs in a single API call for high-throughput applicati
 **Example Request:**
 
 ```bash
-curl -X POST https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/costs/batch \
+curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/costs/batch \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <access_token>" \
   --data '{
@@ -1620,7 +1620,7 @@ curl -X POST https://price-keeper.us-east-1.amazonaws.com/api/v1/orgs/550e8400-e
 import requests
 import os
 
-base_url = 'https://price-keeper.us-east-1.amazonaws.com'
+base_url = 'https://cost-keeper.<some-domain>.com'
 org_id = '550e8400-e29b-41d4-a716-446655440000'
 app_id = 'app-production-api'
 
