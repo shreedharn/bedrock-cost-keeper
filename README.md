@@ -1,28 +1,34 @@
 # Bedrock Cost Keeper
 
-A REST service that helps applications manage Amazon Bedrock model costs through intelligent model selection based on daily spend quotas.
+A lightweight REST service for managing Amazon Bedrock costs through quota-aware model selection and usage tracking.
 
 ## What is Bedrock Cost Keeper?
 
-Bedrock Cost Keeper is a **client-driven, eventually consistent REST service** that enables applications to:
+Bedrock Cost Keeper helps applications optimize Amazon Bedrock spending by providing intelligent model recommendations based on daily budget quotas. The service tracks usage across multiple models and organizations, enabling automatic fallback to more cost-effective alternatives when quotas are exceeded.
 
-- Track and aggregate Amazon Bedrock usage costs in real-time
-- Select models intelligently based on daily budget quotas
-- Support multi-tenant organizations with flexible quota scoping
-- Provide usage analytics and cost visibility
+**Architecture**: Client-driven REST service with eventually consistent usage aggregation (30-60s lag). Applications retain full control over model selection while receiving quota-aware recommendations.
 
-**Key Principle**: This is a **helper service, not an enforcer**. Applications make their own decisions about which Bedrock models to use, with the service providing recommendations based on quota awareness.
+**Key Capabilities:**
+- Track usage and costs across multiple Bedrock models with label-based configuration
+- Automatically recommend fallback models when daily quotas are exceeded
+- Support multi-tenant deployments with organization and application-level quota scoping
+- Provide usage analytics with daily and historical aggregate queries
+
+**Design Philosophy**: This is an advisory service, not an enforcement layer. Applications make final model selection decisions based on service recommendations. The eventually consistent design accepts small quota overruns (typically <5%) in exchange for horizontal scalability and low operational overhead.
 
 ## Motivation
 
-When building applications powered by Amazon Bedrock, managing costs across multiple models and teams can be challenging:
+Organizations deploying Amazon Bedrock at scale face several cost management challenges:
 
-- **Cost visibility**: Teams need real-time visibility into Bedrock spending
-- **Budget management**: Organizations need to enforce daily/monthly budget limits
-- **Model flexibility**: Applications should automatically switch to cheaper models when budgets are tight
-- **Multi-tenancy**: Different teams/apps need independent quota management
+**Cost Control**: Without centralized tracking, Bedrock spending can grow unpredictably across teams and applications. Daily quota limits help prevent budget overruns while maintaining service availability.
 
-Bedrock Cost Keeper solves these challenges with a lightweight, scalable service that integrates seamlessly with existing Bedrock workflows.
+**Model Economics**: Bedrock offers models at different price points (e.g., Claude Opus vs Haiku). Applications should intelligently select cheaper alternatives when premium model quotas are exhausted, but building this logic into every application creates duplication and maintenance burden.
+
+**Multi-Tenancy**: Different teams require independent budgets and quota policies. A shared metering service provides consistent quota management without coupling applications to a specific implementation.
+
+**Operational Visibility**: Teams need usage metrics and cost breakdowns by model, application, and organization to understand spending patterns and optimize model selection strategies.
+
+Bedrock Cost Keeper addresses these challenges through a lightweight, horizontally scalable service that integrates with existing Bedrock workflows via a simple REST API.
 
 ## Architecture Overview
 
@@ -56,38 +62,38 @@ For detailed client integration flow diagrams including Normal Mode and Tight Mo
 
 ## Core Features
 
-### Intelligent Model Selection
-- Recommends Bedrock models based on current quota status
-- Automatic fallback to cheaper alternatives when budgets exceeded
-- Sticky fallback prevents oscillation between models
+### Quota-Aware Model Selection
+- Returns recommended Bedrock model based on current quota consumption
+- Automatic fallback to next model in configured ordering when quotas exceeded
+- Sticky fallback behavior prevents model oscillation within same day
 
-### Real-time Cost Tracking
-- Post-request metering with eventual consistency
-- Sharded aggregation prevents hot DynamoDB partitions
-- Sub-minute aggregation lag
+### Eventually Consistent Usage Tracking
+- Async cost submission with 30-60 second aggregation lag
+- Sharded counter architecture prevents DynamoDB hot partitions at scale
+- Acceptable quota overruns (<5%) in exchange for horizontal scalability
 
-### Multi-tenant Support
-- Organization and application hierarchy
-- Flexible quota scoping (org-wide or per-app)
-- Independent configurations per tenant
+### Multi-Tenant Quota Management
+- Organization and application hierarchy for quota isolation
+- Flexible scoping: organization-wide quotas or per-application quotas
+- Label-based model configuration allows model upgrades without client changes
 
-### Secure Authentication
-- JWT-based authentication (OAuth2 client credentials)
-- Token revocation support
-- Credential rotation with grace periods
+### OAuth2 Client Credentials Authentication
+- JWT access tokens (1 hour) and refresh tokens (30 days)
+- Token revocation for immediate access removal
+- Zero-downtime credential rotation with configurable grace periods
 
-### Usage Analytics
-- Daily and historical usage queries
-- Cost breakdown by model and application
-- Real-time quota status
+### Usage Analytics and Reporting
+- Daily aggregate queries by organization, application, and model
+- Historical data retention with configurable TTL
+- Quota status and cost breakdown endpoints
 
-## Goals
+## Design Goals
 
-1. **Cost Efficiency**: Enable organizations to optimize Bedrock spending through intelligent model selection
-2. **Scalability**: Handle high-throughput workloads with minimal infrastructure cost
-3. **Simplicity**: Provide a simple REST API that integrates easily into existing applications
-4. **Reliability**: Eventual consistency with acceptable overrun tolerance (<5% of quota)
-5. **Flexibility**: Support N models with label-based configuration for easy model upgrades
+1. **Cost Optimization**: Enable budget-conscious model selection across multiple Bedrock models with configurable daily quotas
+2. **Horizontal Scalability**: Stateless architecture with sharded data layer supports high-throughput workloads 
+3. **Simple Integration**: Standard REST API with OAuth2 authentication requires minimal client-side changes
+4. **Operational Reliability**: Eventual consistency design accepts small quota overruns (<5%) to avoid coordination overhead
+5. **Configuration Flexibility**: Label-based model abstraction allows model version upgrades without application redeployment
 
 ## Design Principles
 
