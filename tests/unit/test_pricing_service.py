@@ -233,7 +233,7 @@ class TestCalculateCost:
         assert cost == 1375
 
     def test_calculate_cost_integer_division_precision(self, pricing_service):
-        """Test that integer division doesn't cause rounding issues for small values."""
+        """Test that integer division works correctly for small values."""
         # Very small token counts
         cost = pricing_service.calculate_cost(
             input_tokens=1,
@@ -242,9 +242,8 @@ class TestCalculateCost:
             output_price_per_1m=15000000
         )
 
-        # (1 * 3000000 / 1M) + (1 * 15000000 / 1M) = 0 + 0 = 0 (rounds down)
-        # This is expected behavior - sub-micro-USD amounts round to zero
-        assert cost == 0
+        # (1 * 3000000 / 1M) + (1 * 15000000 / 1M) = 3 + 15 = 18 micro-USD
+        assert cost == 18
 
     def test_calculate_cost_various_inputs(self, pricing_service):
         """Test calculation with various realistic input/output ratios."""

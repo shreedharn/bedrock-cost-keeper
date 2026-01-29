@@ -152,13 +152,13 @@ pytest tests/integration -v -m integration
 ### Run Specific Test File
 
 ```bash
-pytest tests/integration/test_costs_integration.py -v
+pytest tests/integration/test_usage_integration.py -v
 ```
 
 ### Run Specific Test
 
 ```bash
-pytest tests/integration/test_costs_integration.py::TestCostSubmissionIntegration::test_submit_single_cost_to_db -v
+pytest tests/integration/test_usage_integration.py::TestUsageSubmissionIntegration::test_submit_single_usage_to_db -v
 ```
 
 ### Run with Coverage
@@ -179,9 +179,9 @@ pytest tests/ -v
 
 ### What's Tested
 
-1. **Cost Submission**
-   - Single cost submission to DynamoDB
-   - Batch cost submission
+1. **Usage Submission**
+   - Single usage submission to DynamoDB (service calculates cost)
+   - Batch usage submission
    - Data persistence verification
    - Idempotency (duplicate request_id)
    - Multiple model support
@@ -202,7 +202,7 @@ pytest tests/ -v
 - `test_org_credentials`: Actual test org/app credentials from DB
 - `integration_auth_headers`: Valid JWT tokens for API calls
 - `integration_test_client`: FastAPI client with real DB connection
-- `sample_cost_data`: Sample cost submission payload
+- `sample_usage_data`: Sample usage submission payload (no cost - calculated server-side)
 
 ### Test Data Cleanup
 

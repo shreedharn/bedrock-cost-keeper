@@ -1,5 +1,5 @@
 """API route modules."""
 
-from . import auth, costs, model_selection, provisioning, aggregates
+from . import auth, usage, model_selection, provisioning, aggregates
 
-__all__ = ["auth", "costs", "model_selection", "provisioning", "aggregates"]
+__all__ = ["auth", "usage", "model_selection", "provisioning", "aggregates"]
