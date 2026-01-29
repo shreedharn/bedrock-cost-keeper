@@ -11,7 +11,7 @@ from ..core.exceptions import BaseAPIException
 from ..infrastructure.database.dynamodb_bridge import DynamoDBBridge
 
 # Import routers
-from .routes import auth, costs, model_selection, provisioning, aggregates
+from .routes import auth, usage, model_selection, provisioning, aggregates
 
 # Import dependencies
 from . import dependencies
@@ -125,9 +125,9 @@ app.include_router(
 )
 
 app.include_router(
-    costs.router,
+    usage.router,
     prefix=settings.api_prefix,
-    tags=["Cost Submission"]
+    tags=["Usage Submission"]
 )
 
 app.include_router(

@@ -1,26 +1,29 @@
 """Metering service for cost submission and usage tracking."""
 
 import hashlib
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 import pytz
 
 from ...infrastructure.database.bridge import DatabaseBridge
 from ...core.exceptions import InvalidConfigException, InvalidRequestException
 from ...core.config import main_config
+from .pricing_service import PricingService
 
 
 class MeteringService:
     """Service for handling metering operations."""
 
-    def __init__(self, db_bridge: DatabaseBridge):
+    def __init__(self, db_bridge: DatabaseBridge, pricing_service: Optional[PricingService] = None):
         """
         Initialize metering service.
 
         Args:
             db_bridge: Database bridge instance
+            pricing_service: Optional pricing service instance for cost calculation
         """
         self.db = db_bridge
+        self.pricing_service = pricing_service
 
     def _compute_scope(self, org_config: Dict[str, Any], org_id: str, app_id: str) -> str:
         """
@@ -69,7 +72,7 @@ class MeteringService:
         hash_value = int(hashlib.sha256(request_id.encode()).hexdigest(), 16)
         return hash_value % shard_count
 
-    async def submit_cost(
+    async def submit_usage(
         self,
         org_id: str,
         app_id: str,
@@ -78,12 +81,13 @@ class MeteringService:
         bedrock_model_id: str,
         input_tokens: int,
         output_tokens: int,
-        cost_usd_micros: int,
         status: str,
         timestamp: datetime
     ) -> Dict[str, Any]:
         """
-        Submit cost data for a request.
+        Submit usage data for a request and calculate cost server-side.
+
+        Calculates cost using current pricing from config.yaml or PricingCache table.
 
         Args:
             org_id: Organization UUID
@@ -93,16 +97,16 @@ class MeteringService:
             bedrock_model_id: Bedrock model ID
             input_tokens: Input token count
             output_tokens: Output token count
-            cost_usd_micros: Cost in micro-USD
             status: Request status (OK or ERROR)
             timestamp: When request occurred
 
         Returns:
-            Submission result with processing info
+            Submission result with processing info and calculated cost
 
         Raises:
             InvalidConfigException: If model label not configured
             InvalidRequestException: If timestamp out of range
+            ValueError: If pricing not found for model
         """
         # Get org config
         org_config = await self.db.get_org_config(org_id)
@@ -130,6 +134,23 @@ class MeteringService:
                     'configured_labels': model_ordering,
                     'app_id': app_id
                 }
+            )
+
+        # Calculate cost from usage using PricingService
+        date = timestamp.strftime('%Y-%m-%d')
+        if self.pricing_service:
+            pricing = await self.pricing_service.get_pricing(bedrock_model_id, date)
+            cost_usd_micros = self.pricing_service.calculate_cost(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                input_price_per_1m=pricing['input_price_usd_micros_per_1m'],
+                output_price_per_1m=pricing['output_price_usd_micros_per_1m']
+            )
+        else:
+            # Fallback if pricing_service not provided (for backward compatibility)
+            raise InvalidConfigException(
+                "PricingService required for cost calculation",
+                details={'bedrock_model_id': bedrock_model_id}
             )
 
         # Compute scope and day
@@ -162,14 +183,47 @@ class MeteringService:
         return {
             'request_id': request_id,
             'status': 'accepted',
-            'message': 'Cost data queued for processing',
+            'message': 'Usage data queued for processing',
             'processing': {
                 'shard_id': shard_id,
-                'expected_aggregation_lag_secs': 60
+                'expected_aggregation_lag_secs': 60,
+                'cost_usd_micros': cost_usd_micros
             },
             'daily_total': daily_total,
             'timestamp': datetime.now(timezone.utc)
         }
+
+    # Legacy alias for backward compatibility
+    async def submit_cost(
+        self,
+        org_id: str,
+        app_id: str,
+        request_id: str,
+        model_label: str,
+        bedrock_model_id: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd_micros: int,
+        status: str,
+        timestamp: datetime
+    ) -> Dict[str, Any]:
+        """
+        Legacy method - use submit_usage instead.
+
+        This method is deprecated and will be removed in a future version.
+        """
+        # Ignore the provided cost_usd_micros and calculate server-side
+        return await self.submit_usage(
+            org_id=org_id,
+            app_id=app_id,
+            request_id=request_id,
+            model_label=model_label,
+            bedrock_model_id=bedrock_model_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            status=status,
+            timestamp=timestamp
+        )
 
     async def get_current_usage(
         self,

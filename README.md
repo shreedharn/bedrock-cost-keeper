@@ -282,10 +282,11 @@ response = bedrock.converse(
 )
 ```
 
-### 5. Submit Cost
+### 5. Submit Usage
 ```python
+# Service calculates cost from tokens - no need to calculate client-side
 requests.post(
-    f'https://api.example.com/api/v1/orgs/{org_id}/apps/{app_id}/costs',
+    f'https://api.example.com/api/v1/orgs/{org_id}/apps/{app_id}/usage',
     headers={'Authorization': f'Bearer {access_token}'},
     json={
         'request_id': str(uuid.uuid4()),
@@ -293,7 +294,6 @@ requests.post(
         'bedrock_model_id': model,
         'input_tokens': response['usage']['inputTokens'],
         'output_tokens': response['usage']['outputTokens'],
-        'cost_usd_micros': calculated_cost,
         'status': 'OK',
         'timestamp': datetime.utcnow().isoformat() + 'Z'
     }

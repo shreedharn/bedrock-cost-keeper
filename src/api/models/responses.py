@@ -176,8 +176,11 @@ class ModelSelectionResponse(BaseModel):
     org_local_time: str
 
 
-class CostSubmissionResponse(BaseModel):
-    """Response model for cost submission."""
+class UsageSubmissionResponse(BaseModel):
+    """Response model for usage submission.
+
+    Returns the service-calculated cost along with usage data.
+    """
     request_id: str
     status: str
     message: str
@@ -185,19 +188,31 @@ class CostSubmissionResponse(BaseModel):
     timestamp: datetime
 
 
-class BatchCostResult(BaseModel):
-    """Result for a single cost submission in a batch."""
+# Legacy alias for backward compatibility during transition
+CostSubmissionResponse = UsageSubmissionResponse
+
+
+class BatchUsageResult(BaseModel):
+    """Result for a single usage submission in a batch."""
     request_id: str
     status: str
     error: Optional[str] = None
 
 
-class BatchCostSubmissionResponse(BaseModel):
-    """Response model for batch cost submission."""
+# Legacy alias for backward compatibility during transition
+BatchCostResult = BatchUsageResult
+
+
+class BatchUsageSubmissionResponse(BaseModel):
+    """Response model for batch usage submission."""
     accepted: int
     failed: int
-    results: List[BatchCostResult]
+    results: List[BatchUsageResult]
     timestamp: datetime
+
+
+# Legacy alias for backward compatibility during transition
+BatchCostSubmissionResponse = BatchUsageSubmissionResponse
 
 
 class ErrorResponse(BaseModel):

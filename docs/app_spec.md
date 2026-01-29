@@ -120,9 +120,8 @@ config_<org_name>.yaml (per-org)
 
 **Client Behavior:**
 - Uses previously determined model
-- Load and cache model pricing for cost calculation
-- Asynchronous cost submission
-- During cost submission get the calculated DailyTotal from the Price Keeper service
+- Asynchronous usage submission (service calculates cost from tokens)
+- During usage submission get the calculated DailyTotal from the Price Keeper service
 - Periodic model selection checks (e.g., every 5 minutes) to detect quota exceeded states
 
 
@@ -175,19 +174,23 @@ Time 12:00 AM: Reset to premium
 
 ### Pricing Management
 
-**Source**: Bedrock Pricing API
-- Fetched on service startup
-- Refreshed once per day
-- Fallback to `default_pricing` in config.yaml if API unavailable
+**Source**: Bedrock Pricing API & config.yaml
+- Fetched on service startup (planned - not yet implemented)
+- Refreshed once per day (planned)
+- Currently uses `default_pricing` in config.yaml
+- Future: Bedrock Pricing API integration with fallback to config
 
 **Not checked before inference**: Client makes direct Bedrock calls
 
-**Cost computation timing:**
-- After Bedrock response received
-- Based on input_tokens and output_tokens returned
-- Formula: `cost = (input_tokens × input_price) + (output_tokens × output_price)`
+**Cost computation:**
+- **Location**: Server-side (not client-side)
+- **Timing**: When client submits usage via POST /usage
+- **Input**: Client sends only input_tokens and output_tokens
+- **Service calculates cost** using current pricing from config.yaml or PricingCache
+- **Formula**: `cost = (input_tokens × input_price / 1M) + (output_tokens × output_price / 1M)`
+- **Returns**: Calculated cost in response for client transparency
 
-**Pricing updates**: Not retroactive; each request uses pricing version at time of call
+**Pricing updates**: Not retroactive; each request uses pricing version at time of submission
 
 ---
 
@@ -207,7 +210,7 @@ Refer [API Spec](./api_spec.md)
 
 ### Normal Request Flow
 
-**Client learns mode status from DailyTotal in POST /costs response**
+**Client learns mode status from DailyTotal in POST /usage response**
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -226,17 +229,13 @@ Refer [API Spec](./api_spec.md)
    └────────┬────────────────────────┘
             │
             ▼
-   ┌──────────────────────────────┐
-   │ Calculate cost locally       │
-   │ using cached pricing         │
-   └────────┬─────────────────────┘
-            │
-            ▼
-   ┌──────────────────────────────────────────┐
-   │ POST /costs (async)                      │
-   │   - Submits: cost, tokens, model_label   │
-   │   - Receives: DailyTotal with mode info  │
-   └────────┬─────────────────────────────────┘
+   ┌──────────────────────────────────────────────┐
+   │ POST /usage (async)                          │
+   │   - Submits: tokens, model_label             │
+   │   - Service calculates cost from tokens      │
+   │   - Receives: DailyTotal with mode info      │
+   │   - Receives: calculated cost in response    │
+   └────────┬─────────────────────────────────────┘
             │
             ▼
    ┌──────────────────────────────────────┐
@@ -275,16 +274,13 @@ Refer [API Spec](./api_spec.md)
    └────────┬────────────────────────┘
             │
             ▼
-   ┌──────────────────────────────┐
-   │ Calculate cost locally       │
-   └────────┬─────────────────────┘
-            │
-            ▼
-   ┌──────────────────────────────────────────┐
-   │ POST /costs (async)                      │
-   │   - Submits: cost, tokens, model_label   │
-   │   - Receives: DailyTotal with mode info  │
-   └──────────────────────────────────────────┘
+   ┌──────────────────────────────────────────────┐
+   │ POST /usage (async)                          │
+   │   - Submits: tokens, model_label             │
+   │   - Service calculates cost from tokens      │
+   │   - Receives: DailyTotal with mode info      │
+   │   - Receives: calculated cost in response    │
+   └──────────────────────────────────────────────┘
 
    Periodic Background Task (every 60s in TIGHT mode):
    ┌────────────────────────────────────────────┐

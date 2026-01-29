@@ -176,15 +176,30 @@ async def integration_test_client(dynamodb_bridge):
 
 
 @pytest.fixture
-def sample_cost_data():
-    """Sample cost submission data for integration tests."""
+def sample_usage_data():
+    """Sample usage submission data for integration tests (cost calculated server-side)."""
     return {
         "request_id": "550e8400-e29b-41d4-a716-446655440001",
         "model_label": "premium",
         "bedrock_model_id": "anthropic.claude-3-opus-20240229-v1:0",
         "input_tokens": 1000,
         "output_tokens": 500,
-        "cost_usd_micros": 45000,
+        "status": "OK",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+# Legacy alias for backward compatibility
+@pytest.fixture
+def sample_cost_data():
+    """Legacy sample cost submission data - use sample_usage_data instead."""
+    return {
+        "request_id": "550e8400-e29b-41d4-a716-446655440001",
+        "model_label": "premium",
+        "bedrock_model_id": "anthropic.claude-3-opus-20240229-v1:0",
+        "input_tokens": 1000,
+        "output_tokens": 500,
+        "cost_usd_micros": 45000,  # Deprecated - service calculates cost
         "status": "OK",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

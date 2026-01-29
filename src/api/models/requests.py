@@ -58,14 +58,17 @@ class CredentialRotationRequest(BaseModel):
     grace_period_hours: int = Field(default=24, ge=0, le=168)
 
 
-class CostSubmissionRequest(BaseModel):
-    """Request model for cost submission."""
+class UsageSubmissionRequest(BaseModel):
+    """Request model for usage submission.
+
+    Note: cost_usd_micros is NOT included - the service calculates cost
+    from input_tokens and output_tokens using current pricing data.
+    """
     request_id: UUID4
     model_label: str
     bedrock_model_id: str
     input_tokens: int = Field(..., ge=0)
     output_tokens: int = Field(..., ge=0)
-    cost_usd_micros: int = Field(..., ge=0)
     status: str = Field(..., pattern="^(OK|ERROR)$")
     timestamp: datetime
 
@@ -78,6 +81,14 @@ class CostSubmissionRequest(BaseModel):
         return v
 
 
-class BatchCostSubmissionRequest(BaseModel):
-    """Request model for batch cost submission."""
-    requests: List[CostSubmissionRequest] = Field(..., min_length=1, max_length=100)
+# Legacy alias for backward compatibility during transition
+CostSubmissionRequest = UsageSubmissionRequest
+
+
+class BatchUsageSubmissionRequest(BaseModel):
+    """Request model for batch usage submission."""
+    requests: List[UsageSubmissionRequest] = Field(..., min_length=1, max_length=100)
+
+
+# Legacy alias for backward compatibility during transition
+BatchCostSubmissionRequest = BatchUsageSubmissionRequest

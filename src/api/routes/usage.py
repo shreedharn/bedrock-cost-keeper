@@ -1,14 +1,16 @@
-"""Cost submission endpoints."""
+"""Usage submission endpoints."""
 
 from typing import Annotated
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Path
-from ..models.requests import CostSubmissionRequest, BatchCostSubmissionRequest
-from ..models.responses import CostSubmissionResponse, BatchCostSubmissionResponse, BatchCostResult
+from ..models.requests import UsageSubmissionRequest, BatchUsageSubmissionRequest
+from ..models.responses import UsageSubmissionResponse, BatchUsageSubmissionResponse, BatchUsageResult
 from ...infrastructure.database.dynamodb_bridge import DynamoDBBridge
 from ...domain.services.metering_service import MeteringService
+from ...domain.services.pricing_service import PricingService
 from ...core.exceptions import InvalidConfigException
+from ...core.config import main_config
 from ..dependencies import get_db_bridge, get_current_user
 
 
@@ -16,18 +18,19 @@ from ..dependencies import get_db_bridge, get_current_user
 router = APIRouter()
 
 
-@router.post("/orgs/{org_id}/apps/{app_id}/costs", response_model=CostSubmissionResponse, status_code=202)
-async def submit_cost(
+@router.post("/orgs/{org_id}/apps/{app_id}/usage", response_model=UsageSubmissionResponse, status_code=202)
+async def submit_usage(
     org_id: Annotated[str, Path(description="Organization UUID")],
     app_id: Annotated[str, Path(description="Application identifier")],
-    request: CostSubmissionRequest,
+    request: UsageSubmissionRequest,
     db: Annotated[DynamoDBBridge, Depends(get_db_bridge)],
     current_user: Annotated[dict, Depends(get_current_user)]
 ):
     """
-    Submit request cost and usage data for aggregation.
+    Submit request usage data for aggregation.
 
-    The cost submission is accepted asynchronously and queued for processing.
+    The service calculates cost from input_tokens and output_tokens using current pricing.
+    Usage submission is accepted asynchronously and queued for processing.
     Submitting the same request_id multiple times is idempotent.
     """
     # Verify authorization
@@ -37,11 +40,14 @@ async def submit_cost(
     if current_user.get('app_id') and current_user['app_id'] != app_id:
         raise InvalidConfigException("App ID mismatch")
 
-    # Create metering service
-    metering_service = MeteringService(db)
+    # Create pricing service
+    pricing_service = PricingService(db, main_config)
 
-    # Submit cost
-    result = await metering_service.submit_cost(
+    # Create metering service with pricing service
+    metering_service = MeteringService(db, pricing_service)
+
+    # Submit usage (cost calculated server-side)
+    result = await metering_service.submit_usage(
         org_id=org_id,
         app_id=app_id,
         request_id=str(request.request_id),
@@ -49,24 +55,23 @@ async def submit_cost(
         bedrock_model_id=request.bedrock_model_id,
         input_tokens=request.input_tokens,
         output_tokens=request.output_tokens,
-        cost_usd_micros=request.cost_usd_micros,
         status=request.status,
         timestamp=request.timestamp
     )
 
-    return CostSubmissionResponse(**result)
+    return UsageSubmissionResponse(**result)
 
 
-@router.post("/orgs/{org_id}/apps/{app_id}/costs/batch", response_model=BatchCostSubmissionResponse, status_code=207)
-async def submit_costs_batch(
+@router.post("/orgs/{org_id}/apps/{app_id}/usage/batch", response_model=BatchUsageSubmissionResponse, status_code=207)
+async def submit_usage_batch(
     org_id: Annotated[str, Path(description="Organization UUID")],
     app_id: Annotated[str, Path(description="Application identifier")],
-    request: BatchCostSubmissionRequest,
+    request: BatchUsageSubmissionRequest,
     db: Annotated[DynamoDBBridge, Depends(get_db_bridge)],
     current_user: Annotated[dict, Depends(get_current_user)]
 ):
     """
-    Submit multiple cost records in a batch.
+    Submit multiple usage records in a batch.
 
     Returns 207 Multi-Status with individual results for each submission.
     """
@@ -77,42 +82,45 @@ async def submit_costs_batch(
     if current_user.get('app_id') and current_user['app_id'] != app_id:
         raise InvalidConfigException("App ID mismatch")
 
-    metering_service = MeteringService(db)
+    # Create pricing service
+    pricing_service = PricingService(db, main_config)
+
+    # Create metering service with pricing service
+    metering_service = MeteringService(db, pricing_service)
 
     results = []
     accepted = 0
     failed = 0
 
-    for cost_request in request.requests:
+    for usage_request in request.requests:
         try:
-            await metering_service.submit_cost(
+            await metering_service.submit_usage(
                 org_id=org_id,
                 app_id=app_id,
-                request_id=str(cost_request.request_id),
-                model_label=cost_request.model_label,
-                bedrock_model_id=cost_request.bedrock_model_id,
-                input_tokens=cost_request.input_tokens,
-                output_tokens=cost_request.output_tokens,
-                cost_usd_micros=cost_request.cost_usd_micros,
-                status=cost_request.status,
-                timestamp=cost_request.timestamp
+                request_id=str(usage_request.request_id),
+                model_label=usage_request.model_label,
+                bedrock_model_id=usage_request.bedrock_model_id,
+                input_tokens=usage_request.input_tokens,
+                output_tokens=usage_request.output_tokens,
+                status=usage_request.status,
+                timestamp=usage_request.timestamp
             )
 
-            results.append(BatchCostResult(
-                request_id=str(cost_request.request_id),
+            results.append(BatchUsageResult(
+                request_id=str(usage_request.request_id),
                 status="accepted"
             ))
             accepted += 1
 
         except Exception as e:
-            results.append(BatchCostResult(
-                request_id=str(cost_request.request_id),
+            results.append(BatchUsageResult(
+                request_id=str(usage_request.request_id),
                 status="failed",
                 error=str(e)
             ))
             failed += 1
 
-    return BatchCostSubmissionResponse(
+    return BatchUsageSubmissionResponse(
         accepted=accepted,
         failed=failed,
         results=results,

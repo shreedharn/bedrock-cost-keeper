@@ -295,8 +295,8 @@ API requests are rate-limited per client_id (extracted from JWT token).
 | `POST /credentials/rotate` | 5 requests/hour | API key |
 | `GET /aggregates/*` | 60 requests/minute | client_id |
 | `GET /model-selection` | 120 requests/minute | client_id |
-| `POST /costs` | 1000 requests/minute | client_id |
-| `POST /costs/batch` | 100 requests/minute | client_id |
+| `POST /usage` | 1000 requests/minute | client_id |
+| `POST /usage/batch` | 100 requests/minute | client_id |
 
 **Rate Limit Headers:**
 ```
@@ -1400,11 +1400,11 @@ curl -X GET "https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d
 
 ---
 
-## Cost Submission
+## Usage Submission
 
-### POST /orgs/{org_id}/apps/{app_id}/costs
+### POST /orgs/{org_id}/apps/{app_id}/usage
 
-Submit request cost and usage data for aggregation.
+Submit request usage data for aggregation. **The service calculates cost from token usage** using current pricing data from the configuration.
 
 **Path Parameters:**
 - `org_id` (string, required) - Organization UUID
@@ -1419,7 +1419,6 @@ Submit request cost and usage data for aggregation.
   "bedrock_model_id": "string",
   "input_tokens": integer,
   "output_tokens": integer,
-  "cost_usd_micros": integer,
   "status": "string",
   "timestamp": "string"
 }
@@ -1434,15 +1433,17 @@ Submit request cost and usage data for aggregation.
 | `bedrock_model_id` | string | Yes | Actual Bedrock model ID used |
 | `input_tokens` | integer | Yes | Number of input tokens |
 | `output_tokens` | integer | Yes | Number of output tokens |
-| `cost_usd_micros` | integer | Yes | Total cost in micro-USD |
 | `status` | string | Yes | `OK` or `ERROR` |
 | `timestamp` | string (ISO 8601) | Yes | When the request occurred |
+
+**Note:** `cost_usd_micros` is **NOT** included in the request. The service calculates cost server-side using:
+- Current pricing data from config.yaml or PricingCache table
+- Formula: `cost = (input_tokens × input_price / 1M) + (output_tokens × output_price / 1M)`
 
 **Validation Rules:**
 - `request_id` must be valid UUID format
 - `model_label` must exist in org/app configuration
 - `input_tokens` and `output_tokens` must be non-negative
-- `cost_usd_micros` must be non-negative
 - `timestamp` must not be in the future
 - `timestamp` must be within current org-local day (±24 hours tolerance)
 
@@ -1452,14 +1453,18 @@ Submit request cost and usage data for aggregation.
 {
   "request_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   "status": "accepted",
-  "message": "Cost data queued for processing",
+  "message": "Usage data queued for processing",
   "processing": {
     "shard_id": 3,
-    "expected_aggregation_lag_secs": 60
+    "expected_aggregation_lag_secs": 60,
+    "cost_usd_micros": 16500
   },
   "timestamp": "2026-01-23T15:30:45Z"
 }
 ```
+
+**Response Fields:**
+- `processing.cost_usd_micros` - The cost calculated by the service from your token usage
 
 **Idempotency:**
 - Submitting the same `request_id` multiple times is safe
@@ -1500,7 +1505,7 @@ Submit request cost and usage data for aggregation.
 **Example Request:**
 
 ```bash
-curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/costs \
+curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/usage \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <access_token>" \
   --data '{
@@ -1509,7 +1514,6 @@ curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d
     "bedrock_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
     "input_tokens": 1500,
     "output_tokens": 800,
-    "cost_usd_micros": 15750,
     "status": "OK",
     "timestamp": "2026-01-23T15:30:45Z"
   }'
@@ -1517,9 +1521,9 @@ curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d
 
 ---
 
-### POST /orgs/{org_id}/apps/{app_id}/costs/batch
+### POST /orgs/{org_id}/apps/{app_id}/usage/batch
 
-Submit multiple request costs in a single API call for high-throughput applications.
+Submit multiple usage records in a single API call for high-throughput applications. **Cost is calculated server-side for each record.**
 
 **Path Parameters:**
 - `org_id` (string, required) - Organization UUID
@@ -1536,7 +1540,6 @@ Submit multiple request costs in a single API call for high-throughput applicati
       "bedrock_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
       "input_tokens": 1500,
       "output_tokens": 800,
-      "cost_usd_micros": 15750,
       "status": "OK",
       "timestamp": "2026-01-23T15:30:45Z"
     },
@@ -1546,7 +1549,6 @@ Submit multiple request costs in a single API call for high-throughput applicati
       "bedrock_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
       "input_tokens": 1200,
       "output_tokens": 600,
-      "cost_usd_micros": 3600,
       "status": "OK",
       "timestamp": "2026-01-23T15:30:46Z"
     }
@@ -1589,7 +1591,7 @@ Submit multiple request costs in a single API call for high-throughput applicati
 **Example Request:**
 
 ```bash
-curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/costs/batch \
+curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/usage/batch \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <access_token>" \
   --data '{
@@ -1600,7 +1602,6 @@ curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d
         "bedrock_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
         "input_tokens": 1500,
         "output_tokens": 800,
-        "cost_usd_micros": 15750,
         "status": "OK",
         "timestamp": "2026-01-23T15:30:45Z"
       }
@@ -1740,16 +1741,17 @@ def calculate_cost(input_tokens, output_tokens, pricing):
     return input_cost + output_cost
 ```
 
-#### 3. Submitting Costs
+#### 3. Submitting Usage
 
 ```python
 import threading
 
-def submit_cost_async(request_id, input_tokens, output_tokens, cost):
+def submit_usage_async(request_id, input_tokens, output_tokens):
+    """Submit usage data - service calculates cost from tokens."""
     def submit():
         try:
             requests.post(
-                f'{base_url}/api/v1/orgs/{org_id}/apps/{app_id}/costs',
+                f'{base_url}/api/v1/orgs/{org_id}/apps/{app_id}/usage',
                 headers=get_headers(),
                 json={
                     'request_id': request_id,
@@ -1757,14 +1759,13 @@ def submit_cost_async(request_id, input_tokens, output_tokens, cost):
                     'bedrock_model_id': model_cache['model_id'],
                     'input_tokens': input_tokens,
                     'output_tokens': output_tokens,
-                    'cost_usd_micros': cost,
                     'status': 'OK',
                     'timestamp': datetime.utcnow().isoformat() + 'Z'
                 }
             )
         except Exception as e:
             # Log error but don't block main flow
-            logger.error(f'Cost submission failed: {e}')
+            logger.error(f'Usage submission failed: {e}')
 
     # Submit in background thread
     threading.Thread(target=submit, daemon=True).start()

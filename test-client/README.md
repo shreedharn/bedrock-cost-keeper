@@ -149,9 +149,8 @@ Service Aggregates
 1. **Authenticate**: Obtains JWT access token via OAuth2
 2. **Get Model Selection**: Queries the service for recommended model based on quotas
 3. **Invoke Bedrock**: Calls AWS Bedrock with the recommended model
-4. **Calculate Cost**: Computes cost from input/output tokens and pricing
-5. **Submit Cost**: Posts cost data back to the service
-6. **Verify**: Retrieves aggregates to confirm tracking
+4. **Submit Usage**: Posts token usage to the service (service calculates cost server-side)
+5. **Verify**: Retrieves aggregates to confirm tracking
 
 ## Troubleshooting
 
@@ -245,18 +244,13 @@ model = client.get_model_selection()
 messages = [{'role': 'user', 'content': [{'text': 'Your prompt here'}]}]
 response = client.invoke_bedrock(model['model_id'], messages)
 
-# Calculate and submit cost
-cost = client.calculate_cost(
-    response['usage'],
-    model['pricing']['input_price_per_1k_tokens'],
-    model['pricing']['output_price_per_1k_tokens']
-)
-client.submit_cost(
+# Submit usage (service calculates cost from tokens)
+client.submit_usage(
     response['ResponseMetadata']['RequestId'],
     model['model_label'],
+    model['model_id'],
     response['usage']['inputTokens'],
-    response['usage']['outputTokens'],
-    cost
+    response['usage']['outputTokens']
 )
 ```
 

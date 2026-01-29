@@ -696,7 +696,7 @@ Before going to production, complete these steps:
 > - Set up billing alerts before deployment
 > - Conduct your own detailed cost analysis for your specific use case
 
-### Monthly Cost Breakdown (US East 1)
+### Monthly Cost Breakdown (US East 1) - NUMBERS NEED TO BE PLUGGED IN and REVIEWED.
 
 **ECS Fargate** (2 tasks @ 0.5 vCPU, 1 GB memory):
 - 2 tasks × 730 hours × $0.04048/vCPU/hour = $59.10

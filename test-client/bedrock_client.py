@@ -123,60 +123,46 @@ class BedrockCostKeeperClient:
             print(f"[ERROR] Bedrock invocation failed: {e}")
             raise
 
-    def calculate_cost(
-        self,
-        usage: Dict[str, int],
-        input_price_per_1k: float,
-        output_price_per_1k: float
-    ) -> int:
-        """Calculate cost in USD micros from token usage"""
-        input_tokens = usage.get('inputTokens', 0)
-        output_tokens = usage.get('outputTokens', 0)
-
-        # Calculate cost in dollars
-        input_cost = (input_tokens / 1000) * input_price_per_1k
-        output_cost = (output_tokens / 1000) * output_price_per_1k
-        total_cost = input_cost + output_cost
-
-        # Convert to USD micros (multiply by 1,000,000)
-        cost_usd_micros = int(total_cost * 1_000_000)
-
-        print(f"[INFO] Input tokens: {input_tokens}, Output tokens: {output_tokens}")
-        print(f"[INFO] Cost: ${total_cost:.6f} ({cost_usd_micros} USD micros)")
-
-        return cost_usd_micros
-
-    def submit_cost(
+    def submit_usage(
         self,
         request_id: str,
         model_label: str,
+        bedrock_model_id: str,
         input_tokens: int,
         output_tokens: int,
-        cost_usd_micros: int
+        status: str = 'OK'
     ) -> Dict[str, Any]:
-        """Submit cost data to the service"""
-        print(f"[INFO] Submitting cost data for request {request_id}...")
+        """Submit usage data to the service (service calculates cost from tokens)"""
+        print(f"[INFO] Submitting usage data for request {request_id}...")
+        print(f"[INFO] Input tokens: {input_tokens}, Output tokens: {output_tokens}")
 
         payload = {
             'request_id': request_id,
             'model_label': model_label,
+            'bedrock_model_id': bedrock_model_id,
             'input_tokens': input_tokens,
             'output_tokens': output_tokens,
-            'cost_usd_micros': cost_usd_micros,
+            'status': status,
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
         response = requests.post(
-            f'{self.service_url}/submit-cost',
+            f'{self.service_url}/orgs/{self.org_id}/apps/{self.app_id}/usage',
             headers=self.get_headers(),
             json=payload
         )
 
         if response.status_code != 202:
-            raise Exception(f"Cost submission failed: {response.text}")
+            raise Exception(f"Usage submission failed: {response.text}")
 
-        print("[INFO] Cost submitted successfully")
-        return response.json()
+        result = response.json()
+
+        # Extract and display server-calculated cost
+        calculated_cost = result.get('processing', {}).get('cost_usd_micros', 0)
+        print(f"[INFO] Service calculated cost: ${calculated_cost / 1_000_000:.6f} ({calculated_cost} USD micros)")
+        print("[INFO] Usage submitted successfully")
+
+        return result
 
     def get_aggregates(self, date: Optional[str] = None) -> Dict[str, Any]:
         """Get usage aggregates"""
@@ -244,22 +230,17 @@ class BedrockCostKeeperClient:
 
                 print(f"[INFO] Response: {response_text[:100]}...")
 
-                # Calculate cost
-                cost_usd_micros = self.calculate_cost(
-                    usage,
-                    pricing['input_price_per_1k_tokens'],
-                    pricing['output_price_per_1k_tokens']
-                )
-
-                # Submit cost
-                self.submit_cost(
+                # Submit usage (service calculates cost)
+                submission_result = self.submit_usage(
                     request_id,
                     model_label,
+                    model_id,
                     usage['inputTokens'],
-                    usage['outputTokens'],
-                    cost_usd_micros
+                    usage['outputTokens']
                 )
 
+                # Extract service-calculated cost for tracking
+                cost_usd_micros = submission_result.get('processing', {}).get('cost_usd_micros', 0)
                 total_cost += cost_usd_micros
                 successful_requests += 1
 
