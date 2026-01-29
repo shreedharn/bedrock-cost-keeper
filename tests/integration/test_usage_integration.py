@@ -130,7 +130,7 @@ class TestUsageSubmissionIntegration:
             usage = {
                 "request_id": str(uuid.uuid4()),
                 "model_label": "standard",
-                "bedrock_model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
+                "bedrock_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
                 "input_tokens": 1000 + (i * 100),
                 "output_tokens": 500 + (i * 50),
                 "status": "OK",
@@ -346,14 +346,15 @@ class TestUsageSubmissionIntegration:
         creds = test_org_credentials
 
         # Only use models configured for the app (premium and standard)
+        # Use model IDs from config.yaml
         models = [
             {
                 "label": "premium",
-                "bedrock_id": "anthropic.claude-3-opus-20240229-v1:0",
+                "bedrock_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
             },
             {
                 "label": "standard",
-                "bedrock_id": "anthropic.claude-3-sonnet-20240229-v1:0",
+                "bedrock_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
             }
         ]
 
