@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Depends, Header
 from ..infrastructure.security.jwt_handler import JWTHandler
 from ..infrastructure.database.dynamodb_bridge import DynamoDBBridge
+from ..domain.services.inference_profile_service import InferenceProfileService
 from ..core.config import settings
 from ..core.exceptions import UnauthorizedException
 
@@ -11,12 +12,33 @@ from ..core.exceptions import UnauthorizedException
 # Global database bridge instance
 db_bridge: DynamoDBBridge = None
 
+# Global inference profile service instance
+inference_profile_service: InferenceProfileService = None
+
 jwt_handler = JWTHandler()
 
 
 def get_db_bridge() -> DynamoDBBridge:
     """Dependency to get database bridge."""
     return db_bridge
+
+
+def get_db() -> DynamoDBBridge:
+    """Alias for get_db_bridge for consistency."""
+    return db_bridge
+
+
+def get_inference_profile_service() -> InferenceProfileService:
+    """Dependency to get inference profile service."""
+    return inference_profile_service
+
+
+async def verify_jwt_token(
+    authorization: Annotated[str, Header()],
+    db: Annotated[DynamoDBBridge, Depends(get_db_bridge)]
+) -> dict:
+    """Alias for get_current_user for consistency."""
+    return await get_current_user(authorization, db)
 
 
 async def get_current_user(

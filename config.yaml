@@ -41,38 +41,123 @@ metering:
 # Model label definitions
 # Labels provide abstraction layer between org configs and actual Bedrock models
 # Orgs reference these labels in their model_ordering
+#
+# LABEL STRUCTURE:
+# Each label must have:
+#   - type: "model" or "profile"
+#   - id: bedrock_model_id (for type=model) or inference_profile_arn (for type=profile)
+#   - description: Human-readable description
+#   - input_price_usd_micros_per_1m: FALLBACK pricing for input tokens (both model and profile types)
+#   - output_price_usd_micros_per_1m: FALLBACK pricing for output tokens (both model and profile types)
+#
+# PRICING RESOLUTION (CRITICAL):
+# **Pricing is ALWAYS retrieved from the Pricing API first.**
+# The input_price and output_price fields in this config are FALLBACK values used ONLY when:
+#   1. Pricing API is unreachable/down, AND
+#   2. No recent cached pricing exists in memory or DynamoDB
+#
+# This fallback mechanism applies to BOTH type=model and type=profile labels.
+# In normal operation, the Pricing API is the single source of truth for all pricing.
+#
+# LABEL TYPES:
+# 1. type: "model" - Traditional Bedrock Model
+#    - id contains bedrock_model_id (e.g., "anthropic.claude-3-5-sonnet-20241022-v2:0")
+#    - Static mappings defined in this config file
+#    - Used for standard model selection and fallback
+#    - No calling_region required in usage submissions
+#    - Pricing: Fetched from Pricing API → fallback to config if API down
+#
+# 2. type: "profile" - AWS Bedrock Application Inference Profile
+#    - id contains inference_profile_arn (e.g., "arn:aws:bedrock:us-east-1:123456:inference-profile/tenant-a")
+#    - Can be defined here OR registered dynamically via POST /inference-profiles API
+#    - Enable multi-tenant cost tracking with native AWS cost allocation
+#    - Requires calling_region parameter in usage submissions
+#    - Support multi-region model routing
+#    - Pricing: Fetched from Pricing API (region-specific) → fallback to config if API down
+#    - Model details: Fetched from AWS GetInferenceProfile API on first use, then memoized in memory
+#
+# LABEL RESOLUTION PRIORITY:
+# When resolving a label, the system checks in this order:
+#   1. Registered inference profiles (from database via API)
+#   2. Labels defined in this config file (both model and profile types)
+#
+# Example inference profile in config (optional - can also register via API):
+#   tenant-a-premium:
+#     type: "profile"
+#     id: "arn:aws:bedrock:us-east-1:123456:inference-profile/tenant-a"
+#     description: "Premium profile for Tenant A"
+#     input_price_usd_micros_per_1m: 3000000    # FALLBACK only (Pricing API is primary source)
+#     output_price_usd_micros_per_1m: 15000000  # FALLBACK only (Pricing API is primary source)
+#
+# Example inference profile registration via API (alternative to config):
+#   POST /api/v1/orgs/{org_id}/apps/{app_id}/inference-profiles
+#   {
+#     "profile_label": "tenant-a-premium",
+#     "inference_profile_arn": "arn:aws:bedrock:us-east-1:123456:inference-profile/tenant-a",
+#     "description": "Premium profile for Tenant A"
+#   }
+#
+# Example usage submission with type=profile:
+#   POST /api/v1/orgs/{org_id}/apps/{app_id}/usage
+#   {
+#     "model_label": "tenant-a-premium",  # References profile (from config or API)
+#     "calling_region": "us-east-1",      # Required for type=profile
+#     "input_tokens": 1000,
+#     "output_tokens": 500,
+#     ...
+#   }
+#
 model_labels:
   premium:
-    bedrock_model_id: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    type: "model"
+    id: "anthropic.claude-3-5-sonnet-20241022-v2:0"
     description: "Claude 3.5 Sonnet v2 - Premium tier, highest performance"
     tier: premium
     family: claude-3.5
+    # FALLBACK pricing (Pricing API is primary source, these values used only if API down)
     input_price_usd_micros_per_1m: 3000000    # $3.00 per 1M input tokens
     output_price_usd_micros_per_1m: 15000000  # $15.00 per 1M output tokens
 
   standard:
-    bedrock_model_id: "anthropic.claude-3-5-haiku-20241022-v1:0"
+    type: "model"
+    id: "anthropic.claude-3-5-haiku-20241022-v1:0"
     description: "Claude 3.5 Haiku - Standard tier, fast and cost-effective"
     tier: standard
     family: claude-3.5
+    # FALLBACK pricing (Pricing API is primary source, these values used only if API down)
     input_price_usd_micros_per_1m: 800000     # $0.80 per 1M input tokens
     output_price_usd_micros_per_1m: 4000000   # $4.00 per 1M output tokens
 
   economy:
-    bedrock_model_id: "anthropic.claude-3-haiku-20240307-v1:0"
+    type: "model"
+    id: "anthropic.claude-3-haiku-20240307-v1:0"
     description: "Claude 3 Haiku - Economy tier, most cost-effective"
     tier: economy
     family: claude-3
+    # FALLBACK pricing (Pricing API is primary source, these values used only if API down)
     input_price_usd_micros_per_1m: 250000     # $0.25 per 1M input tokens
     output_price_usd_micros_per_1m: 1250000   # $1.25 per 1M output tokens
 
   ultra_premium:
-    bedrock_model_id: "anthropic.claude-3-opus-20240229-v1:0"
+    type: "model"
+    id: "anthropic.claude-3-opus-20240229-v1:0"
     description: "Claude 3 Opus - Ultra premium, highest capability (Claude 3 series)"
     tier: ultra_premium
     family: claude-3
+    # FALLBACK pricing (Pricing API is primary source, these values used only if API down)
     input_price_usd_micros_per_1m: 15000000   # $15.00 per 1M input tokens
     output_price_usd_micros_per_1m: 75000000  # $75.00 per 1M output tokens
+
+  # Example inference profile (optional - profiles typically registered via API):
+  # tenant-a-premium:
+  #   type: "profile"
+  #   id: "arn:aws:bedrock:us-east-1:123456789012:inference-profile/tenant-a"
+  #   description: "Premium profile for Tenant A with multi-region routing"
+  #   tier: premium
+  #   # FALLBACK pricing (Pricing API is primary source, these values used only if API down)
+  #   input_price_usd_micros_per_1m: 3000000    # $3.00 per 1M input tokens
+  #   output_price_usd_micros_per_1m: 15000000  # $15.00 per 1M output tokens
+  #   # Note: Model details fetched from AWS GetInferenceProfile API on first use, memoized in memory
   
 
 # DynamoDB configuration
@@ -133,11 +218,30 @@ monitoring:
 org_defaults:
   timezone: America/New_York
   quota_scope: APP # Always use APP scope unless apps are small in number
+
+  # Model ordering: List of labels in priority order
+  # Labels can reference:
+  #   - Traditional models (defined in model_labels above)
+  #   - Inference profiles (registered via API for multi-tenant scenarios)
+  #
+  # Example with inference profiles:
+  #   model_ordering:
+  #     - tenant-a-premium    # Registered inference profile (API-defined)
+  #     - premium             # Traditional model label (config-defined)
+  #     - standard            # Traditional model label (config-defined)
+  #
+  # Note: Inference profile labels must be registered via API before use.
+  # Quotas apply to labels regardless of type (model or profile).
   model_ordering:
     - premium     # Claude 3.5 Sonnet v2 (most capable current model)
     - standard    # Claude 3.5 Haiku (fast and economical)
     - economy     # Claude 3 Haiku (most economical)
+
+  # Quotas: Daily spend limits per label (in micro-USD)
+  # Quotas apply to both traditional model labels and inference profile labels
   quotas:
     premium: 10000000         # $10/day (Claude 3.5 Sonnet v2)
     standard: 5000000         # $5/day (Claude 3.5 Haiku)
     economy: 2000000          # $2/day (Claude 3 Haiku)
+    # Example inference profile quota:
+    # tenant-a-premium: 50000000  # $50/day (Tenant A's dedicated profile)

@@ -9,6 +9,7 @@ from ..models.responses import UsageSubmissionResponse, BatchUsageSubmissionResp
 from ...infrastructure.database.dynamodb_bridge import DynamoDBBridge
 from ...domain.services.metering_service import MeteringService
 from ...domain.services.pricing_service import PricingService
+from ...domain.services.inference_profile_service import InferenceProfileService
 from ...core.exceptions import InvalidConfigException
 from ...core.config import main_config
 from ..dependencies import get_db_bridge, get_current_user
@@ -43,8 +44,17 @@ async def submit_usage(
     # Create pricing service
     pricing_service = PricingService(db, main_config)
 
-    # Create metering service with pricing service
-    metering_service = MeteringService(db, pricing_service)
+    # Create inference profile service (imported at function level to avoid circular import)
+    from ...domain.services.inference_profile_service import InferenceProfileService
+    profile_service = InferenceProfileService(db)
+
+    # Create metering service with pricing and profile services
+    metering_service = MeteringService(
+        db_bridge=db,
+        pricing_service=pricing_service,
+        profile_service=profile_service,
+        config=main_config
+    )
 
     # Submit usage (cost calculated server-side)
     result = await metering_service.submit_usage(
@@ -56,7 +66,8 @@ async def submit_usage(
         input_tokens=request.input_tokens,
         output_tokens=request.output_tokens,
         status=request.status,
-        timestamp=request.timestamp
+        timestamp=request.timestamp,
+        calling_region=request.calling_region
     )
 
     return UsageSubmissionResponse(**result)
@@ -85,8 +96,16 @@ async def submit_usage_batch(
     # Create pricing service
     pricing_service = PricingService(db, main_config)
 
-    # Create metering service with pricing service
-    metering_service = MeteringService(db, pricing_service)
+    # Create inference profile service
+    profile_service = InferenceProfileService(db)
+
+    # Create metering service with pricing and profile services
+    metering_service = MeteringService(
+        db_bridge=db,
+        pricing_service=pricing_service,
+        profile_service=profile_service,
+        config=main_config
+    )
 
     results = []
     accepted = 0
@@ -103,7 +122,8 @@ async def submit_usage_batch(
                 input_tokens=usage_request.input_tokens,
                 output_tokens=usage_request.output_tokens,
                 status=usage_request.status,
-                timestamp=usage_request.timestamp
+                timestamp=usage_request.timestamp,
+                calling_region=usage_request.calling_region
             )
 
             results.append(BatchUsageResult(

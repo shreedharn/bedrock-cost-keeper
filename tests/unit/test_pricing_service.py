@@ -19,17 +19,20 @@ def test_config():
     return {
         'model_labels': {
             'premium': {
-                'bedrock_model_id': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+                'type': 'model',
+                'id': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
                 'input_price_usd_micros_per_1m': 3000000,
                 'output_price_usd_micros_per_1m': 15000000
             },
             'standard': {
-                'bedrock_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0',
+                'type': 'model',
+                'id': 'anthropic.claude-3-5-haiku-20241022-v1:0',
                 'input_price_usd_micros_per_1m': 800000,
                 'output_price_usd_micros_per_1m': 4000000
             },
             'economy': {
-                'bedrock_model_id': 'anthropic.claude-3-haiku-20240307-v1:0',
+                'type': 'model',
+                'id': 'anthropic.claude-3-haiku-20240307-v1:0',
                 'input_price_usd_micros_per_1m': 250000,
                 'output_price_usd_micros_per_1m': 1250000
             }
@@ -114,7 +117,7 @@ class TestGetPricing:
         pricing = await pricing_service.get_pricing(bedrock_model_id, date)
 
         assert pricing == dynamodb_pricing
-        pricing_service.db.get_pricing.assert_called_once_with(bedrock_model_id, date)
+        pricing_service.db.get_pricing.assert_called_once_with(bedrock_model_id, date, None)
 
     @pytest.mark.asyncio
     async def test_get_pricing_cache_stores_in_memory(self, pricing_service):

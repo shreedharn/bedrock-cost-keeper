@@ -9,9 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from ..core.config import settings
 from ..core.exceptions import BaseAPIException
 from ..infrastructure.database.dynamodb_bridge import DynamoDBBridge
-
+from ..domain.services.inference_profile_service import InferenceProfileService
 # Import routers
-from .routes import auth, usage, model_selection, provisioning, aggregates
+from .routes import auth, usage, model_selection, provisioning, aggregates, inference_profiles
 
 # Import dependencies
 from . import dependencies
@@ -22,6 +22,10 @@ async def lifespan(app: FastAPI):
     """Application lifespan management."""
     # Startup
     dependencies.db_bridge = DynamoDBBridge()
+
+    # Initialize inference profile service
+    dependencies.inference_profile_service = InferenceProfileService(dependencies.db_bridge)
+
     print(f"Starting {settings.app_name} v{settings.version}")
 
     yield
@@ -134,6 +138,12 @@ app.include_router(
     aggregates.router,
     prefix=settings.api_prefix,
     tags=["Aggregates"]
+)
+
+app.include_router(
+    inference_profiles.router,
+    prefix=settings.api_prefix,
+    tags=["Inference Profiles"]
 )
 
 

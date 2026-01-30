@@ -58,15 +58,39 @@ class CredentialRotationRequest(BaseModel):
     grace_period_hours: int = Field(default=24, ge=0, le=168)
 
 
+class InferenceProfileRegistrationRequest(BaseModel):
+    """Request model for registering an AWS Bedrock inference profile.
+
+    Inference profiles enable cost allocation at a granular level by tagging
+    requests with custom identifiers. This is useful for multi-tenant scenarios.
+    """
+    profile_label: str = Field(..., min_length=1, max_length=50)
+    inference_profile_arn: str = Field(
+        ...,
+        pattern=r'^arn:aws:bedrock:[a-z0-9-]+:\d{12}:inference-profile/[\w-]+$'
+    )
+    description: Optional[str] = None
+
+
 class UsageSubmissionRequest(BaseModel):
     """Request model for usage submission.
 
     Note: cost_usd_micros is NOT included - the service calculates cost
     from input_tokens and output_tokens using current pricing data.
+
+    The model_label can point to either:
+    1. A traditional bedrock_model_id (from config.yaml)
+    2. A registered inference profile (from database)
+
+    If the label points to an inference profile, calling_region is required.
     """
     request_id: UUID4
     model_label: str
     bedrock_model_id: str
+    calling_region: Optional[str] = Field(
+        None,
+        pattern=r'^[a-z]{2}-[a-z]+-\d$'
+    )
     input_tokens: int = Field(..., ge=0)
     output_tokens: int = Field(..., ge=0)
     status: str = Field(..., pattern="^(OK|ERROR)$")

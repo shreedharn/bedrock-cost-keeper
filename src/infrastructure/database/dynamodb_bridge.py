@@ -291,14 +291,32 @@ class DynamoDBBridge(DatabaseBridge):
 
     # ==================== Pricing Cache Operations ====================
 
-    async def get_pricing(self, bedrock_model_id: str, date: str) -> Optional[Dict[str, Any]]:
-        """Get pricing for a model on a specific date."""
+    async def get_pricing(
+        self,
+        bedrock_model_id: str,
+        date: str,
+        region: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Get pricing for a model on a specific date, optionally region-specific.
+
+        Args:
+            bedrock_model_id: The AWS Bedrock model ID
+            date: Date string (YYYY-MM-DD)
+            region: Optional AWS region for region-specific pricing
+
+        Returns:
+            Pricing data or None if not found
+        """
         dynamodb = await self._get_dynamodb()
         table = await dynamodb.Table(settings.dynamodb_pricing_cache_table)
 
+        # Build key - include region in sk if provided
+        pk = bedrock_model_id
+        sk = f"{date}#{region}" if region else date
+
         try:
             response = await table.get_item(
-                Key={'pk': bedrock_model_id, 'sk': date}
+                Key={'pk': pk, 'sk': sk}
             )
             return response.get('Item')
         except ClientError:
@@ -414,6 +432,103 @@ class DynamoDBBridge(DatabaseBridge):
             if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
                 return None
             raise
+
+    # ==================== Inference Profile Operations ====================
+
+    async def register_inference_profile(
+        self,
+        org_id: str,
+        app_id: str,
+        profile_label: str,
+        inference_profile_arn: str,
+        model_arns: Dict[str, str],
+        description: Optional[str] = None,
+        created_at: Optional[Any] = None
+    ) -> None:
+        """Register an inference profile for an app.
+
+        Args:
+            org_id: Organization ID
+            app_id: Application ID
+            profile_label: Label to use for this profile
+            inference_profile_arn: AWS Bedrock inference profile ARN
+            model_arns: Dict mapping region -> model_id
+            description: Optional description
+            created_at: Creation timestamp
+        """
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_config_table)
+
+        item = {
+            'pk': f'ORG#{org_id}#APP#{app_id}',
+            'sk': f'PROFILE#{profile_label}',
+            'inference_profile_arn': inference_profile_arn,
+            'model_arns': model_arns,
+            'description': description,
+            'created_at': created_at.isoformat() if created_at else None,
+            'updated_at_epoch': int(time.time())
+        }
+
+        await table.put_item(Item=item)
+
+    async def get_inference_profile(
+        self,
+        org_id: str,
+        app_id: str,
+        profile_label: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get a registered inference profile.
+
+        Args:
+            org_id: Organization ID
+            app_id: Application ID
+            profile_label: Profile label
+
+        Returns:
+            Profile data or None if not found
+        """
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_config_table)
+
+        try:
+            response = await table.get_item(
+                Key={
+                    'pk': f'ORG#{org_id}#APP#{app_id}',
+                    'sk': f'PROFILE#{profile_label}'
+                }
+            )
+            return response.get('Item')
+        except ClientError:
+            return None
+
+    async def list_inference_profiles(
+        self,
+        org_id: str,
+        app_id: str
+    ) -> List[Dict[str, Any]]:
+        """List all registered inference profiles for an app.
+
+        Args:
+            org_id: Organization ID
+            app_id: Application ID
+
+        Returns:
+            List of profile registrations
+        """
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_config_table)
+
+        try:
+            response = await table.query(
+                KeyConditionExpression='pk = :pk AND begins_with(sk, :sk_prefix)',
+                ExpressionAttributeValues={
+                    ':pk': f'ORG#{org_id}#APP#{app_id}',
+                    ':sk_prefix': 'PROFILE#'
+                }
+            )
+            return response.get('Items', [])
+        except ClientError:
+            return []
 
     # ==================== Health Check ====================
 

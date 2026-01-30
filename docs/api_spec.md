@@ -1400,6 +1400,114 @@ curl -X GET "https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d
 
 ---
 
+## Inference Profiles
+
+AWS Bedrock Application Inference Profiles enable granular cost tracking for multi-tenant scenarios. The service tracks usage by label (which can point to either a traditional bedrock_model_id or a registered inference profile) and calculates costs based on the actual model used in the calling region.
+
+**Key Benefits:**
+- Native AWS cost allocation via Cost Explorer
+- Multi-region model routing
+- Tenant-level cost tracking
+- Seamless integration with existing quota system
+
+### POST /orgs/{org_id}/apps/{app_id}/inference-profiles
+
+Register an AWS Bedrock inference profile for an application. This allows using the profile_label in usage submissions.
+
+**Path Parameters:**
+- `org_id` (string, required) - Organization UUID
+- `app_id` (string, required) - Application identifier
+
+**Request Headers:**
+```
+Content-Type: application/json
+Authorization: Bearer <access_token>
+```
+
+**Request Body:**
+
+```json
+{
+  "profile_label": "string",
+  "inference_profile_arn": "string",
+  "description": "string"
+}
+```
+
+**Field Descriptions:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `profile_label` | string | Yes | Label to use for this profile (1-50 chars) |
+| `inference_profile_arn` | string | Yes | AWS Bedrock inference profile ARN |
+| `description` | string | No | Human-readable description of the profile |
+
+**ARN Format:**
+```
+arn:aws:bedrock:<region>:<account-id>:inference-profile/<profile-id>
+```
+
+**Validation:**
+- ARN format must be valid (regex validation)
+- Label must not conflict with existing labels in model_ordering
+
+**Important Note:**
+- AWS GetInferenceProfile API is **NOT called during registration**
+- Profile details (models by region) are fetched **on-demand** during first usage submission with `calling_region`
+- Fetched profile details are **memoized in memory** for subsequent requests
+- This reduces latency and AWS API calls during registration
+
+**Response: 201 Created**
+
+```json
+{
+  "profile_label": "tenant-a-premium",
+  "inference_profile_arn": "arn:aws:bedrock:us-east-1:123456789012:inference-profile/tenant-a",
+  "status": "registered",
+  "description": "Premium profile for Tenant A",
+  "created_at": "2026-01-23T15:30:45Z"
+}
+```
+
+**Response Fields:**
+
+| Field | Description |
+|-------|-------------|
+| `status` | Always "registered" on success |
+| `created_at` | ISO 8601 timestamp of registration |
+
+**Error Responses:**
+
+**400 Bad Request - Invalid ARN**
+```json
+{
+  "error": "INVALID_REQUEST",
+  "message": "Invalid inference profile ARN: not-a-valid-arn",
+  "timestamp": "2026-01-23T15:30:45Z"
+}
+```
+
+**Note:** AWS profile validation happens during usage submission, not registration. If the profile doesn't exist in AWS, the first usage submission will fail with an appropriate error message.
+
+**Example Request:**
+
+```bash
+curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/inference-profiles \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  --data '{
+    "profile_label": "tenant-a-premium",
+    "inference_profile_arn": "arn:aws:bedrock:us-east-1:123456789012:inference-profile/tenant-a",
+    "description": "Premium profile for Tenant A"
+  }'
+```
+
+---
+
+**Note:** Listing inference profiles is out of scope for the cost tracker. Apps manage profile labels internally.
+
+---
+
 ## Usage Submission
 
 ### POST /orgs/{org_id}/apps/{app_id}/usage
@@ -1417,6 +1525,7 @@ Submit request usage data for aggregation. **The service calculates cost from to
   "request_id": "string",
   "model_label": "string",
   "bedrock_model_id": "string",
+  "calling_region": "string",
   "input_tokens": integer,
   "output_tokens": integer,
   "status": "string",
@@ -1429,8 +1538,9 @@ Submit request usage data for aggregation. **The service calculates cost from to
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `request_id` | string (UUID) | Yes | Unique request identifier (for idempotency) |
-| `model_label` | string | Yes | Model label from config (e.g., `premium`) |
-| `bedrock_model_id` | string | Yes | Actual Bedrock model ID used |
+| `model_label` | string | Yes | Model label (points to traditional model or inference profile) |
+| `bedrock_model_id` | string | Yes | Actual Bedrock model ID used (for backward compatibility) |
+| `calling_region` | string | Conditional | AWS region where request was made (e.g., `us-east-1`). **Required** when `model_label` points to an inference profile, optional for traditional models |
 | `input_tokens` | integer | Yes | Number of input tokens |
 | `output_tokens` | integer | Yes | Number of output tokens |
 | `status` | string | Yes | `OK` or `ERROR` |
@@ -1440,9 +1550,18 @@ Submit request usage data for aggregation. **The service calculates cost from to
 - Current pricing data from config.yaml or PricingCache table
 - Formula: `cost = (input_tokens × input_price / 1M) + (output_tokens × output_price / 1M)`
 
+**Label Resolution:**
+The `model_label` field can point to either:
+1. **Traditional model** (from config.yaml) - No `calling_region` required
+2. **Inference profile** (registered via API) - `calling_region` **required**
+
+The service checks the database first for registered inference profiles, then falls back to config.yaml.
+
 **Validation Rules:**
 - `request_id` must be valid UUID format
-- `model_label` must exist in org/app configuration
+- `model_label` must exist in org/app configuration or be a registered inference profile
+- `calling_region` must be provided if `model_label` points to an inference profile
+- `calling_region` must match pattern `^[a-z]{2}-[a-z]+-\d$` (e.g., `us-east-1`)
 - `input_tokens` and `output_tokens` must be non-negative
 - `timestamp` must not be in the future
 - `timestamp` must be within current org-local day (±24 hours tolerance)
@@ -1502,7 +1621,20 @@ Submit request usage data for aggregation. **The service calculates cost from to
 }
 ```
 
-**Example Request:**
+**400 Bad Request - Missing calling_region for Inference Profile**
+```json
+{
+  "error": "INVALID_REQUEST",
+  "message": "calling_region is required when using inference profile label: tenant-a-premium",
+  "details": {
+    "model_label": "tenant-a-premium",
+    "label_type": "profile"
+  },
+  "timestamp": "2026-01-23T15:30:45Z"
+}
+```
+
+**Example Request (Traditional Model):**
 
 ```bash
 curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/usage \
@@ -1518,6 +1650,30 @@ curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d
     "timestamp": "2026-01-23T15:30:45Z"
   }'
 ```
+
+**Example Request (Inference Profile):**
+
+```bash
+curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/usage \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  --data '{
+    "request_id": "8d0f7680-8536-51ef-b827-557766551001",
+    "model_label": "tenant-a-premium",
+    "bedrock_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "calling_region": "us-east-1",
+    "input_tokens": 1000,
+    "output_tokens": 500,
+    "status": "OK",
+    "timestamp": "2026-01-23T15:30:45Z"
+  }'
+```
+
+**Note:** When using inference profiles:
+- The service resolves the actual model based on the `calling_region`
+- Cost is calculated using region-specific model pricing
+- Quotas still apply to the `model_label` (same as traditional models)
+- AWS Cost Explorer can track costs by the inference profile ARN
 
 ---
 

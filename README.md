@@ -6,7 +6,7 @@ A lightweight REST service for managing Amazon Bedrock costs through quota-aware
 
 Bedrock Cost Keeper helps applications optimize Amazon Bedrock spending by providing intelligent model recommendations based on daily budget quotas. The service tracks usage across multiple models and organizations, enabling automatic fallback to more cost-effective alternatives when quotas are exceeded.
 
-**Architecture**: Client-driven REST service with eventually consistent usage aggregation (30-60s lag). Applications retain full control over model selection while receiving quota-aware recommendations.
+**Architecture**: Client-driven REST service with eventually consistent usage aggregation. The consuming applications retain full control over model selection while receiving quota-aware recommendations.
 
 **Key Capabilities:**
 - Track usage and costs across multiple Bedrock models with label-based configuration
@@ -38,9 +38,9 @@ Bedrock Cost Keeper addresses these challenges through a lightweight, horizontal
 │                      │
 │  1. Get model config │◄──┐
 │  2. Call Bedrock     │   │
-│  3. Submit cost      │   │ REST API
+│  3. Submit cost      │   │ 
 └────────┬────────-----┘   │
-         │                 │
+         │    (REST APIs)  │
          ▼                 │
 ┌──────────────────────────────┐
 │  Bedrock Cost Keeper Service │
@@ -68,14 +68,20 @@ For detailed client integration flow diagrams including Normal Mode and Tight Mo
 - Sticky fallback behavior prevents model oscillation within same day
 
 ### Eventually Consistent Usage Tracking
-- Async cost submission with 30-60 second aggregation lag
+- Async cost submission 
 - Sharded counter architecture prevents DynamoDB hot partitions at scale
-- Acceptable quota overruns (<5%) in exchange for horizontal scalability
+- Acceptable quota overruns (<5%) 
 
 ### Multi-Tenant Quota Management
 - Organization and application hierarchy for quota isolation
 - Flexible scoping: organization-wide quotas or per-application quotas
 - Label-based model configuration allows model upgrades without client changes
+
+### AWS Bedrock Inference Profiles Integration
+- Native support for AWS Bedrock Application Inference Profiles for granular cost tracking
+- Multi-region model routing with automatic region-based model resolution
+- Register inference profiles as labels for transparent cost allocation
+- Backward compatible with traditional bedrock_model_id usage
 
 ### OAuth2 Client Credentials Authentication
 - JWT access tokens (1 hour) and refresh tokens (30 days)
@@ -97,7 +103,7 @@ For detailed client integration flow diagrams including Normal Mode and Tight Mo
 
 ## Design Principles
 
-- **Client-driven**: Applications make final decisions; service provides guidance
+- **Client-driven**: Applications make final decisions; service provides cost consumption information
 - **Eventually consistent**: Accept small overruns for better performance
 - **Horizontally scalable**: Stateless service design with sharded data
 - **Cost-conscious**: Minimize infrastructure costs while maintaining reliability
@@ -132,7 +138,7 @@ For detailed client integration flow diagrams including Normal Mode and Tight Mo
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd bedrock_metering
+   cd bedrock_cost_keeper
    ```
 
 2. **Install dependencies**
@@ -299,6 +305,45 @@ requests.post(
     }
 )
 ```
+
+### 6. Using Inference Profiles (Multi-Tenant Cost Tracking)
+
+For multi-tenant scenarios, register AWS Bedrock Application Inference Profiles:
+
+```python
+# Register an inference profile for tenant A
+requests.post(
+    f'https://api.example.com/api/v1/orgs/{org_id}/apps/{app_id}/inference-profiles',
+    headers={'Authorization': f'Bearer {access_token}'},
+    json={
+        'profile_label': 'tenant-a-premium',
+        'inference_profile_arn': 'arn:aws:bedrock:us-east-1:123456:inference-profile/tenant-a',
+        'description': 'Premium profile for Tenant A'
+    }
+)
+
+# Submit usage using the profile label (calling_region required)
+requests.post(
+    f'https://api.example.com/api/v1/orgs/{org_id}/apps/{app_id}/usage',
+    headers={'Authorization': f'Bearer {access_token}'},
+    json={
+        'request_id': str(uuid.uuid4()),
+        'model_label': 'tenant-a-premium',  # Points to registered profile
+        'bedrock_model_id': 'anthropic.claude-3-5-sonnet-20241022-v2:0',  # For backward compat
+        'calling_region': 'us-east-1',  # Required for profiles
+        'input_tokens': 1000,
+        'output_tokens': 500,
+        'status': 'OK',
+        'timestamp': datetime.utcnow().isoformat() + 'Z'
+    }
+)
+```
+
+Benefits:
+- Native AWS cost allocation via Cost Explorer
+- Multi-region model routing
+- Tenant-level cost tracking without custom metering
+- Seamless integration with existing quota system
 
 See [API Reference](./docs/api_spec.md) for complete API documentation.
 

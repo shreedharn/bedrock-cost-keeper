@@ -80,6 +80,16 @@ class CredentialRotationResponse(BaseModel):
     rotation: RotationInfo
 
 
+class InferenceProfileResponse(BaseModel):
+    """Response model for inference profile registration."""
+    profile_label: str
+    inference_profile_arn: str
+    supported_regions: List[str]
+    status: str
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 class SecretRetrievalResponse(BaseModel):
     """Response model for secret retrieval."""
     client_id: str

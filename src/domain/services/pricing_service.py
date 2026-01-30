@@ -28,17 +28,23 @@ class PricingService:
         self._cache: Dict[str, tuple[Dict[str, Any], float]] = {}
         self._cache_ttl = 300  # 5 minutes
 
-    async def get_pricing(self, bedrock_model_id: str, date: str) -> Dict[str, Any]:
-        """Get pricing for a model on a specific date.
+    async def get_pricing(
+        self,
+        bedrock_model_id: str,
+        date: str,
+        region: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Get pricing for a model on a specific date, optionally region-specific.
 
         Priority order:
         1. In-memory cache (5-minute TTL)
-        2. DynamoDB PricingCache table
+        2. DynamoDB PricingCache table (with region if provided)
         3. config.yaml fallback
 
         Args:
             bedrock_model_id: The Bedrock model ID (e.g., "anthropic.claude-3-5-sonnet-20241022-v2:0")
             date: Date string in YYYY-MM-DD format
+            region: Optional AWS region for region-specific pricing
 
         Returns:
             Dict containing pricing data with keys:
@@ -48,21 +54,26 @@ class PricingService:
         Raises:
             ValueError: If no pricing found for the model
         """
-        # Check in-memory cache
+        # Cache key includes region if provided
         cache_key = f"{bedrock_model_id}:{date}"
+        if region:
+            cache_key = f"{bedrock_model_id}:{region}:{date}"
+
+        # Check in-memory cache
         if cache_key in self._cache:
             cached_data, cached_time = self._cache[cache_key]
             if time.time() - cached_time < self._cache_ttl:
                 return cached_data
 
-        # Check DynamoDB PricingCache
-        pricing = await self.db.get_pricing(bedrock_model_id, date)
+        # Check DynamoDB PricingCache (with region)
+        pricing = await self.db.get_pricing(bedrock_model_id, date, region)
         if pricing:
             # Store in in-memory cache
             self._cache[cache_key] = (pricing, time.time())
             return pricing
 
         # Fallback to config.yaml
+        # Note: config.yaml doesn't have region-specific pricing yet
         pricing = self._get_pricing_from_config(bedrock_model_id)
         if pricing:
             # Cache config pricing too
@@ -82,7 +93,8 @@ class PricingService:
         """
         model_labels = self.config.get('model_labels', {})
         for label, model_config in model_labels.items():
-            if model_config.get('bedrock_model_id') == bedrock_model_id:
+            # Only look at type="model" labels (profiles don't have static pricing)
+            if model_config.get('type') == 'model' and model_config.get('id') == bedrock_model_id:
                 return {
                     'input_price_usd_micros_per_1m': model_config['input_price_usd_micros_per_1m'],
                     'output_price_usd_micros_per_1m': model_config['output_price_usd_micros_per_1m']

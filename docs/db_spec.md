@@ -67,6 +67,7 @@ This database design supports the Bedrock Price Keeper REST service with the fol
 1. Get org config: `GetItem(PK="ORG#{org_id}", SK="")`
 2. Get app config: `GetItem(PK="ORG#{org_id}", SK="APP#{app_id}")`
 3. List all apps for org: `Query(PK="ORG#{org_id}", SK begins_with "APP#")`
+4. Get inference profile: `GetItem(PK="ORG#{org_id}#APP#{app_id}", SK="PROFILE#{profile_label}")`
 
 #### Org Config Item
 
@@ -169,6 +170,62 @@ SK: "APP#app-production-api"
   "updated_at_epoch": 1737590400
 }
 ```
+
+#### Inference Profile Item
+
+**Purpose**: Register AWS Bedrock inference profiles for multi-tenant cost tracking
+
+**Key:**
+```
+PK: "ORG#{org_id}#APP#{app_id}"
+SK: "PROFILE#{profile_label}"
+```
+
+**Attributes:**
+- `profile_label` (string) - Label to use in usage submissions
+- `inference_profile_arn` (string) - AWS Bedrock inference profile ARN
+- `description` (string, optional) - Human-readable description
+- `created_at` (string, ISO 8601) - When profile was registered
+- `updated_at_epoch` (number) - Last update timestamp
+
+**Example:**
+```json
+{
+  "PK": "ORG#550e8400-e29b-41d4-a716-446655440000#APP#app-production-api",
+  "SK": "PROFILE#tenant-a-premium",
+  "profile_label": "tenant-a-premium",
+  "inference_profile_arn": "arn:aws:bedrock:us-east-1:123456789012:inference-profile/tenant-a",
+  "description": "Premium profile for Tenant A",
+  "created_at": "2026-01-23T15:30:45Z",
+  "updated_at_epoch": 1737640245
+}
+```
+
+**Label Resolution Priority:**
+When a `model_label` is submitted in a usage request:
+1. Check for registered inference profile (this table)
+2. If not found, check config.yaml `model_labels`
+3. If neither exists, reject request
+
+**Usage Flow with Inference Profiles:**
+1. Client registers profile: `POST /inference-profiles` → validates ARN format → stores in Config table
+2. Client submits usage with `model_label` and `calling_region`
+3. Service resolves label → finds inference profile
+4. Service calls AWS GetInferenceProfile API to get model details (on first use, then memoized in memory)
+5. Service extracts model for `calling_region` from AWS response
+6. Service calculates cost using region-specific model pricing from Pricing API (or config.yaml fallback)
+7. Quota tracking uses `model_label` (same as traditional models)
+
+**Multi-Region Support:**
+- Single profile can route to different models per region
+- AWS GetInferenceProfile API called on-demand (first use) and memoized in memory
+- Service requires `calling_region` in usage submission for profiles
+- Traditional models (config.yaml) don't require `calling_region`
+
+**Important Notes:**
+- **No model_arns stored in database** - AWS is the source of truth, fetched on-demand via boto3
+- **In-memory memoization** - Profile details cached in memory after first fetch
+- **No List endpoint** - Listing registered profiles is out of scope for the cost tracker
 
 ---
 
@@ -450,16 +507,25 @@ BatchGetItem:
 
 **Purpose**: Cache Bedrock pricing to avoid repeated API calls
 
+**Region Support**: Supports optional region-specific pricing for inference profiles
+
 #### Primary Key
 
 - **PK** (string): `{bedrock_model_id}`
-- **SK** (string): `{yyyy-mm-dd}`
+- **SK** (string): `{yyyy-mm-dd}` or `{yyyy-mm-dd}#{region}` for region-specific pricing
 
-#### Key Pattern
+#### Key Patterns
 
+**Traditional pricing (no region):**
 ```
 PK: "anthropic.claude-3-5-sonnet-20241022-v2:0"
 SK: "2026-01-23"
+```
+
+**Region-specific pricing (for inference profiles):**
+```
+PK: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+SK: "2026-01-23#us-east-1"
 ```
 
 #### Attributes
@@ -491,10 +557,16 @@ SK: "2026-01-23"
 
 #### Access Pattern
 
-- **Get today's pricing**: `GetItem(PK={model_id}, SK={today})`
+- **Get today's pricing (traditional)**: `GetItem(PK={model_id}, SK={today})`
+- **Get today's pricing (region-specific)**: `GetItem(PK={model_id}, SK="{today}#{region}")`
 - **Write pricing**: `PutItem` once per day by pricing refresh process
 
-**Fallback**: If pricing not found, use `default_pricing` from config.yaml
+**Pricing Resolution Order:**
+1. Check region-specific pricing: `SK="{date}#{region}"` (if region provided)
+2. Check default pricing: `SK="{date}"` (no region)
+3. Fallback to `default_pricing` from config.yaml
+
+**Note:** Region-specific pricing is used when `model_label` resolves to an inference profile and `calling_region` is provided in the usage submission.
 
 ---
 

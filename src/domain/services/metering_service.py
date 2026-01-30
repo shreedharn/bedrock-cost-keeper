@@ -1,7 +1,7 @@
 """Metering service for cost submission and usage tracking."""
 
 import hashlib
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from datetime import datetime, timezone
 import pytz
 
@@ -10,20 +10,33 @@ from ...core.exceptions import InvalidConfigException, InvalidRequestException
 from ...core.config import main_config
 from .pricing_service import PricingService
 
+if TYPE_CHECKING:
+    from .inference_profile_service import InferenceProfileService
+
 
 class MeteringService:
     """Service for handling metering operations."""
 
-    def __init__(self, db_bridge: DatabaseBridge, pricing_service: Optional[PricingService] = None):
+    def __init__(
+        self,
+        db_bridge: DatabaseBridge,
+        pricing_service: Optional[PricingService] = None,
+        profile_service: Optional['InferenceProfileService'] = None,
+        config: Optional[dict] = None
+    ):
         """
         Initialize metering service.
 
         Args:
             db_bridge: Database bridge instance
             pricing_service: Optional pricing service instance for cost calculation
+            profile_service: Optional inference profile service for profile resolution
+            config: Optional configuration dict for model label lookups
         """
         self.db = db_bridge
         self.pricing_service = pricing_service
+        self.profile_service = profile_service
+        self.config = config or main_config
 
     def _compute_scope(self, org_config: Dict[str, Any], org_id: str, app_id: str) -> str:
         """
@@ -82,23 +95,27 @@ class MeteringService:
         input_tokens: int,
         output_tokens: int,
         status: str,
-        timestamp: datetime
+        timestamp: datetime,
+        calling_region: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Submit usage data for a request and calculate cost server-side.
 
         Calculates cost using current pricing from config.yaml or PricingCache table.
+        The model_label can point to either a traditional bedrock_model_id or a
+        registered inference profile.
 
         Args:
             org_id: Organization UUID
             app_id: Application identifier
             request_id: Request UUID
-            model_label: Model label used
-            bedrock_model_id: Bedrock model ID
+            model_label: Model label used (points to model or inference profile)
+            bedrock_model_id: Bedrock model ID (for backward compatibility)
             input_tokens: Input token count
             output_tokens: Output token count
             status: Request status (OK or ERROR)
             timestamp: When request occurred
+            calling_region: AWS region where request was made (required for inference profiles)
 
         Returns:
             Submission result with processing info and calculated cost
@@ -106,7 +123,7 @@ class MeteringService:
         Raises:
             InvalidConfigException: If model label not configured
             InvalidRequestException: If timestamp out of range
-            ValueError: If pricing not found for model
+            ValueError: If pricing not found for model or calling_region missing for profile
         """
         # Get org config
         org_config = await self.db.get_org_config(org_id)
@@ -136,10 +153,39 @@ class MeteringService:
                 }
             )
 
+        # Resolve label to get actual model ID and type
+        label_info = await self._resolve_label(org_id, app_id, model_label)
+
+        # Get actual model ID for pricing based on label type
+        if label_info['type'] == 'profile':
+            # Inference profile - need calling_region
+            if not calling_region:
+                raise InvalidRequestException(
+                    f"calling_region is required when using inference profile label: {model_label}",
+                    details={'model_label': model_label, 'label_type': 'profile'}
+                )
+
+            # Get model for the calling region
+            actual_model_id = await self.profile_service.get_model_for_region(
+                org_id=org_id,
+                app_id=app_id,
+                profile_label=model_label,
+                calling_region=calling_region
+            )
+            pricing_region = calling_region
+        else:
+            # Traditional model - use bedrock_model_id
+            actual_model_id = bedrock_model_id
+            pricing_region = None
+
         # Calculate cost from usage using PricingService
         date = timestamp.strftime('%Y-%m-%d')
         if self.pricing_service:
-            pricing = await self.pricing_service.get_pricing(bedrock_model_id, date)
+            pricing = await self.pricing_service.get_pricing(
+                bedrock_model_id=actual_model_id,
+                date=date,
+                region=pricing_region
+            )
             cost_usd_micros = self.pricing_service.calculate_cost(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
@@ -150,7 +196,7 @@ class MeteringService:
             # Fallback if pricing_service not provided (for backward compatibility)
             raise InvalidConfigException(
                 "PricingService required for cost calculation",
-                details={'bedrock_model_id': bedrock_model_id}
+                details={'bedrock_model_id': actual_model_id}
             )
 
         # Compute scope and day
@@ -192,6 +238,57 @@ class MeteringService:
             'daily_total': daily_total,
             'timestamp': datetime.now(timezone.utc)
         }
+
+    async def _resolve_label(
+        self,
+        org_id: str,
+        app_id: str,
+        model_label: str
+    ) -> Dict[str, Any]:
+        """Resolve a model label to either a model_id or inference_profile_arn.
+
+        Priority order:
+        1. Check registered inference profiles (database)
+        2. Check config.yaml model_labels
+
+        Args:
+            org_id: Organization ID
+            app_id: Application ID
+            model_label: Label to resolve
+
+        Returns:
+            Dict with keys:
+                - type: "model" or "profile"
+                - identifier: bedrock_model_id or inference_profile_arn
+                - label: the original label
+
+        Raises:
+            InvalidConfigException: If label not found in either location
+        """
+        # Check database for registered inference profile
+        if self.profile_service:
+            profile = await self.db.get_inference_profile(org_id, app_id, model_label)
+            if profile:
+                return {
+                    'type': 'profile',
+                    'identifier': profile['inference_profile_arn'],
+                    'label': model_label
+                }
+
+        # Check config.yaml for model or profile
+        model_config = self.config.get('model_labels', {}).get(model_label)
+        if model_config:
+            label_type = model_config.get('type', 'model')  # Default to 'model' for backward compatibility
+            return {
+                'type': label_type,
+                'identifier': model_config['id'],  # Now using 'id' instead of 'bedrock_model_id'
+                'label': model_label
+            }
+
+        raise InvalidConfigException(
+            f"Unknown model_label: {model_label}. Not found in registered profiles or config.yaml",
+            details={'model_label': model_label}
+        )
 
     # Legacy alias for backward compatibility
     async def submit_cost(
