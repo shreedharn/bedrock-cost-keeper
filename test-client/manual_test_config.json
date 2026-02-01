@@ -10,7 +10,7 @@
   "test_app_id": "sample-app",
   "test_app_name": "Sample Application",
   "test_prompt": "Explain what Amazon Bedrock is in one sentence.",
-  "model_id": "amazon.nova-lite-v1:0",
+  "model_id": "amazon.nova-2-lite-v1:0",
   "profile_label": "nova-lite",
   "quotas": {
     "premium": 10000000,

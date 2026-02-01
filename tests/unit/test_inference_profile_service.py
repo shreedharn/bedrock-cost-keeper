@@ -79,7 +79,7 @@ class TestGetProfileDetails:
             'status': 'ACTIVE',
             'models': [
                 {
-                    'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0',
+                    'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0',
                     'region': 'us-east-1'
                 }
             ]
@@ -89,7 +89,7 @@ class TestGetProfileDetails:
         result = await profile_service._get_profile_details(arn)
 
         assert result['models'] == {
-            'us-east-1': 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+            'us-east-1': 'amazon.nova-pro-v1:0'
         }
 
         # Verify boto3 client was called correctly
@@ -108,15 +108,15 @@ class TestGetProfileDetails:
             'inferenceProfileId': 'multi-region-profile',
             'models': [
                 {
-                    'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0',
+                    'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0',
                     'region': 'us-east-1'
                 },
                 {
-                    'modelArn': 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0',
+                    'modelArn': 'arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-pro-v1:0',
                     'region': 'us-west-2'
                 },
                 {
-                    'modelArn': 'arn:aws:bedrock:eu-west-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0',
+                    'modelArn': 'arn:aws:bedrock:eu-west-1::foundation-model/amazon.nova-pro-v1:0',
                     'region': 'eu-west-1'
                 }
             ]
@@ -126,9 +126,9 @@ class TestGetProfileDetails:
         result = await profile_service._get_profile_details(arn)
 
         assert len(result['models']) == 3
-        assert result['models']['us-east-1'] == 'anthropic.claude-3-5-sonnet-20241022-v2:0'
-        assert result['models']['us-west-2'] == 'anthropic.claude-3-5-sonnet-20241022-v2:0'
-        assert result['models']['eu-west-1'] == 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+        assert result['models']['us-east-1'] == 'amazon.nova-pro-v1:0'
+        assert result['models']['us-west-2'] == 'amazon.nova-pro-v1:0'
+        assert result['models']['eu-west-1'] == 'amazon.nova-pro-v1:0'
 
     @pytest.mark.asyncio
     @patch('src.domain.services.inference_profile_service.boto3')
@@ -161,7 +161,7 @@ class TestRegisterProfile:
             'inferenceProfileId': 'tenant-a',
             'models': [
                 {
-                    'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0',
+                    'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0',
                     'region': 'us-east-1'
                 }
             ]
@@ -240,9 +240,9 @@ class TestGetModelForRegion:
             'profile_label': 'tenant-a-premium',
             'inference_profile_arn': 'arn:aws:bedrock:us-east-1:123456789012:inference-profile/tenant-a',
             'model_arns': {
-                'us-east-1': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                'us-west-2': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                'eu-west-1': 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+                'us-east-1': 'amazon.nova-pro-v1:0',
+                'us-west-2': 'amazon.nova-pro-v1:0',
+                'eu-west-1': 'amazon.nova-pro-v1:0'
             }
         }
 
@@ -253,7 +253,7 @@ class TestGetModelForRegion:
             calling_region="us-west-2"
         )
 
-        assert model_id == 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+        assert model_id == 'amazon.nova-pro-v1:0'
         mock_db.get_inference_profile.assert_called_once_with("org-123", "app-456", "tenant-a-premium")
 
     @pytest.mark.asyncio
@@ -274,7 +274,7 @@ class TestGetModelForRegion:
         """Test error when region is not supported by profile."""
         mock_db.get_inference_profile.return_value = {
             'model_arns': {
-                'us-east-1': 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+                'us-east-1': 'amazon.nova-pro-v1:0'
             }
         }
 

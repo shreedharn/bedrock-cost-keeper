@@ -20,21 +20,21 @@ def test_config():
         'model_labels': {
             'premium': {
                 'type': 'model',
-                'id': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                'input_price_usd_micros_per_1m': 3000000,
-                'output_price_usd_micros_per_1m': 15000000
+                'id': 'amazon.nova-pro-v1:0',
+                'input_price_usd_micros_per_1m': 800000,
+                'output_price_usd_micros_per_1m': 3200000
             },
             'standard': {
                 'type': 'model',
-                'id': 'anthropic.claude-3-5-haiku-20241022-v1:0',
-                'input_price_usd_micros_per_1m': 800000,
-                'output_price_usd_micros_per_1m': 4000000
+                'id': 'amazon.nova-2-lite-v1:0',
+                'input_price_usd_micros_per_1m': 60000,
+                'output_price_usd_micros_per_1m': 240000
             },
             'economy': {
                 'type': 'model',
-                'id': 'anthropic.claude-3-haiku-20240307-v1:0',
-                'input_price_usd_micros_per_1m': 250000,
-                'output_price_usd_micros_per_1m': 1250000
+                'id': 'amazon.nova-micro-v1:0',
+                'input_price_usd_micros_per_1m': 35000,
+                'output_price_usd_micros_per_1m': 140000
             }
         }
     }
@@ -52,27 +52,27 @@ class TestGetPricingFromConfig:
     def test_get_pricing_from_config_yaml(self, pricing_service):
         """Test pricing lookup from config.yaml."""
         pricing = pricing_service._get_pricing_from_config(
-            'anthropic.claude-3-5-sonnet-20241022-v2:0'
-        )
-
-        assert pricing is not None
-        assert pricing['input_price_usd_micros_per_1m'] == 3000000
-        assert pricing['output_price_usd_micros_per_1m'] == 15000000
-
-    def test_get_pricing_from_config_standard_model(self, pricing_service):
-        """Test pricing lookup for standard model."""
-        pricing = pricing_service._get_pricing_from_config(
-            'anthropic.claude-3-5-haiku-20241022-v1:0'
+            'amazon.nova-pro-v1:0'
         )
 
         assert pricing is not None
         assert pricing['input_price_usd_micros_per_1m'] == 800000
-        assert pricing['output_price_usd_micros_per_1m'] == 4000000
+        assert pricing['output_price_usd_micros_per_1m'] == 3200000
+
+    def test_get_pricing_from_config_standard_model(self, pricing_service):
+        """Test pricing lookup for standard model."""
+        pricing = pricing_service._get_pricing_from_config(
+            'amazon.nova-2-lite-v1:0'
+        )
+
+        assert pricing is not None
+        assert pricing['input_price_usd_micros_per_1m'] == 60000
+        assert pricing['output_price_usd_micros_per_1m'] == 240000
 
     def test_get_pricing_missing_model_returns_none(self, pricing_service):
         """Test that missing model returns None."""
         pricing = pricing_service._get_pricing_from_config(
-            'anthropic.claude-unknown-model'
+            'amazon.unknown-model'
         )
 
         assert pricing is None
@@ -85,7 +85,7 @@ class TestGetPricing:
     async def test_get_pricing_cache_hit(self, pricing_service):
         """Test that in-memory cache returns cached data."""
         # Populate cache
-        bedrock_model_id = 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+        bedrock_model_id = 'amazon.nova-pro-v1:0'
         date = '2026-01-29'
 
         # First call should populate cache from config
@@ -101,7 +101,7 @@ class TestGetPricing:
     @pytest.mark.asyncio
     async def test_get_pricing_cache_miss_queries_dynamodb(self, pricing_service):
         """Test that cache miss queries DynamoDB."""
-        bedrock_model_id = 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+        bedrock_model_id = 'amazon.nova-pro-v1:0'
         date = '2026-01-29'
 
         # Mock DynamoDB response
@@ -122,7 +122,7 @@ class TestGetPricing:
     @pytest.mark.asyncio
     async def test_get_pricing_cache_stores_in_memory(self, pricing_service):
         """Test that pricing is stored in in-memory cache."""
-        bedrock_model_id = 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+        bedrock_model_id = 'amazon.nova-pro-v1:0'
         date = '2026-01-29'
 
         # First call should populate cache
@@ -135,7 +135,7 @@ class TestGetPricing:
     @pytest.mark.asyncio
     async def test_get_pricing_fallback_to_config(self, pricing_service):
         """Test fallback to config.yaml when DynamoDB has no data."""
-        bedrock_model_id = 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+        bedrock_model_id = 'amazon.nova-pro-v1:0'
         date = '2026-01-29'
 
         # DynamoDB returns None
@@ -144,8 +144,8 @@ class TestGetPricing:
         pricing = await pricing_service.get_pricing(bedrock_model_id, date)
 
         assert pricing is not None
-        assert pricing['input_price_usd_micros_per_1m'] == 3000000
-        assert pricing['output_price_usd_micros_per_1m'] == 15000000
+        assert pricing['input_price_usd_micros_per_1m'] == 800000
+        assert pricing['output_price_usd_micros_per_1m'] == 3200000
 
     @pytest.mark.asyncio
     async def test_get_pricing_missing_model_raises_error(self, pricing_service):

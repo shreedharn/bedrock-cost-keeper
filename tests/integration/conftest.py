@@ -181,7 +181,7 @@ def sample_usage_data():
     return {
         "request_id": "550e8400-e29b-41d4-a716-446655440001",
         "model_label": "premium",
-        "bedrock_model_id": "anthropic.claude-3-opus-20240229-v1:0",
+        "bedrock_model_id": "amazon.nova-pro-v1:0",
         "input_tokens": 1000,
         "output_tokens": 500,
         "status": "OK",
@@ -196,7 +196,7 @@ def sample_cost_data():
     return {
         "request_id": "550e8400-e29b-41d4-a716-446655440001",
         "model_label": "premium",
-        "bedrock_model_id": "anthropic.claude-3-opus-20240229-v1:0",
+        "bedrock_model_id": "amazon.nova-pro-v1:0",
         "input_tokens": 1000,
         "output_tokens": 500,
         "cost_usd_micros": 45000,  # Deprecated - service calculates cost

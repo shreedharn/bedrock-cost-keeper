@@ -124,3 +124,13 @@ See `.env.example` for required configuration:
 
 ---
 If you don't find the information to solve a given problem, you must use your reasoning to research.
+
+---
+Whenever creating or updating config files for development and testing, use following Bedrock models:
+- amazon.nova-micro-v1:0 (Nova Micro for economy )
+- amazon.nova-2-lite-v1:0 (Nova Lite for standard)
+- amazon.nova-pro-v1:0 (Nova Pro for premium)
+
+Use us-east-1 as default region.
+
+---

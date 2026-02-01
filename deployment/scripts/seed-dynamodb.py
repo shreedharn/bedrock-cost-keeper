@@ -120,8 +120,8 @@ def create_test_application(
             'fallback_strategy': 'cheapest'
         },
         'model_preferences': {
-            'preferred_models': ['anthropic.claude-3-5-sonnet-20241022-v2:0'],
-            'fallback_models': ['anthropic.claude-3-5-haiku-20241022-v1:0'],
+            'preferred_models': ['amazon.nova-pro-v1:0'],
+            'fallback_models': ['amazon.nova-2-lite-v1:0'],
             'blocked_models': []
         }
     }

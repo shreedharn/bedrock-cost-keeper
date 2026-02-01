@@ -110,43 +110,43 @@ metering:
 model_labels:
   premium:
     type: "model"
-    id: "anthropic.claude-3-5-sonnet-20241022-v2:0"
-    description: "Claude 3.5 Sonnet v2 - Premium tier, highest performance"
+    id: "amazon.nova-pro-v1:0"
+    description: "Nova Pro - Premium tier, highest performance"
     tier: premium
-    family: claude-3.5
+    family: nova
     # FALLBACK pricing (Pricing API is primary source, these values used only if API down)
-    input_price_usd_micros_per_1m: 3000000    # $3.00 per 1M input tokens
-    output_price_usd_micros_per_1m: 15000000  # $15.00 per 1M output tokens
+    input_price_usd_micros_per_1m: 800000     # $0.80 per 1M input tokens
+    output_price_usd_micros_per_1m: 3200000   # $3.20 per 1M output tokens
 
   standard:
     type: "model"
-    id: "anthropic.claude-3-5-haiku-20241022-v1:0"
-    description: "Claude 3.5 Haiku - Standard tier, fast and cost-effective"
+    id: "amazon.nova-2-lite-v1:0"
+    description: "Nova Lite - Standard tier, fast and cost-effective"
     tier: standard
-    family: claude-3.5
+    family: nova
     # FALLBACK pricing (Pricing API is primary source, these values used only if API down)
-    input_price_usd_micros_per_1m: 800000     # $0.80 per 1M input tokens
-    output_price_usd_micros_per_1m: 4000000   # $4.00 per 1M output tokens
+    input_price_usd_micros_per_1m: 60000      # $0.06 per 1M input tokens
+    output_price_usd_micros_per_1m: 240000    # $0.24 per 1M output tokens
 
   economy:
     type: "model"
-    id: "anthropic.claude-3-haiku-20240307-v1:0"
-    description: "Claude 3 Haiku - Economy tier, most cost-effective"
+    id: "amazon.nova-micro-v1:0"
+    description: "Nova Micro - Economy tier, most cost-effective"
     tier: economy
-    family: claude-3
+    family: nova
     # FALLBACK pricing (Pricing API is primary source, these values used only if API down)
-    input_price_usd_micros_per_1m: 250000     # $0.25 per 1M input tokens
-    output_price_usd_micros_per_1m: 1250000   # $1.25 per 1M output tokens
+    input_price_usd_micros_per_1m: 35000      # $0.035 per 1M input tokens
+    output_price_usd_micros_per_1m: 140000    # $0.14 per 1M output tokens
 
   ultra_premium:
     type: "model"
-    id: "anthropic.claude-3-opus-20240229-v1:0"
-    description: "Claude 3 Opus - Ultra premium, highest capability (Claude 3 series)"
+    id: "amazon.nova-pro-v1:0"
+    description: "Nova Pro - Ultra premium, highest capability"
     tier: ultra_premium
-    family: claude-3
+    family: nova
     # FALLBACK pricing (Pricing API is primary source, these values used only if API down)
-    input_price_usd_micros_per_1m: 15000000   # $15.00 per 1M input tokens
-    output_price_usd_micros_per_1m: 75000000  # $75.00 per 1M output tokens
+    input_price_usd_micros_per_1m: 800000     # $0.80 per 1M input tokens
+    output_price_usd_micros_per_1m: 3200000   # $3.20 per 1M output tokens
 
   # Example inference profile (optional - profiles typically registered via API):
   # tenant-a-premium:
@@ -233,15 +233,15 @@ org_defaults:
   # Note: Inference profile labels must be registered via API before use.
   # Quotas apply to labels regardless of type (model or profile).
   model_ordering:
-    - premium     # Claude 3.5 Sonnet v2 (most capable current model)
-    - standard    # Claude 3.5 Haiku (fast and economical)
-    - economy     # Claude 3 Haiku (most economical)
+    - premium     # Nova Pro (most capable current model)
+    - standard    # Nova Lite (fast and economical)
+    - economy     # Nova Micro (most economical)
 
   # Quotas: Daily spend limits per label (in micro-USD)
   # Quotas apply to both traditional model labels and inference profile labels
   quotas:
-    premium: 10000000         # $10/day (Claude 3.5 Sonnet v2)
-    standard: 5000000         # $5/day (Claude 3.5 Haiku)
-    economy: 2000000          # $2/day (Claude 3 Haiku)
+    premium: 10000000         # $10/day (Nova Pro)
+    standard: 5000000         # $5/day (Nova Lite)
+    economy: 2000000          # $2/day (Nova Micro)
     # Example inference profile quota:
     # tenant-a-premium: 50000000  # $50/day (Tenant A's dedicated profile)

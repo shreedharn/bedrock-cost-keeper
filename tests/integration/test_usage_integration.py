@@ -83,12 +83,12 @@ class TestUsageSubmissionIntegration:
         creds = test_org_credentials
 
         # Test with known values
-        # Premium model: $3 input, $15 output per 1M tokens
-        # 1500 input + 800 output should = (1500 * 3 / 1000) + (800 * 15 / 1000) = 4.5 + 12 = $16.5 = 16500 micro-USD
+        # Premium model (Nova Pro): $0.80 input, $3.20 output per 1M tokens
+        # 1500 input + 800 output should = (1500 * 0.80 / 1000) + (800 * 3.20 / 1000) = 1.2 + 2.56 = $3.76 = 3760 micro-USD
         usage_data = {
             "request_id": str(uuid.uuid4()),
             "model_label": "premium",
-            "bedrock_model_id": "anthropic.claude-3-opus-20240229-v1:0",
+            "bedrock_model_id": "amazon.nova-pro-v1:0",
             "input_tokens": 1500,
             "output_tokens": 800,
             "status": "OK",
@@ -109,7 +109,7 @@ class TestUsageSubmissionIntegration:
         assert "cost_usd_micros" in data["processing"]
         calculated_cost = data["processing"]["cost_usd_micros"]
 
-        # Verify cost calculation is reasonable (should be around 16500 for premium model)
+        # Verify cost calculation is reasonable (should be around 3760 for Nova Pro model)
         # Allow some variance due to potential pricing differences
         assert calculated_cost > 0, "Cost should be greater than zero"
 
@@ -130,7 +130,7 @@ class TestUsageSubmissionIntegration:
             usage = {
                 "request_id": str(uuid.uuid4()),
                 "model_label": "standard",
-                "bedrock_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+                "bedrock_model_id": "amazon.nova-2-lite-v1:0",
                 "input_tokens": 1000 + (i * 100),
                 "output_tokens": 500 + (i * 50),
                 "status": "OK",
@@ -350,11 +350,11 @@ class TestUsageSubmissionIntegration:
         models = [
             {
                 "label": "premium",
-                "bedrock_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+                "bedrock_id": "amazon.nova-pro-v1:0",
             },
             {
                 "label": "standard",
-                "bedrock_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+                "bedrock_id": "amazon.nova-2-lite-v1:0",
             }
         ]
 
