@@ -33,7 +33,7 @@ bedrock_metering/
 │   ├── app_spec.md       # Architecture & client flows
 │   ├── api_spec.md       # REST API reference
 │   ├── db_spec.md        # DynamoDB schema
-│   └── DEPLOYMENT.md     # Deployment guide
+│   └── deployment.md     # Deployment guide
 ├── config.yaml            # Service config (model labels, defaults)
 └── run.py                 # Entry point
 ```
@@ -102,7 +102,7 @@ bedrock_metering/
 | Authentication | `docs/api_spec.md` § Authentication | `src/api/auth.py` |
 | Quota logic | `docs/app_spec.md` § Operating Modes | `src/services/quota_manager.py` |
 | Model selection | `docs/app_spec.md` § Sticky Fallback | `src/services/model_selector.py` |
-| Deployment issues | `docs/DEPLOYMENT.md` | `cloudformation/` templates |
+| Deployment issues | `docs/deployment.md` | `cloudformation/` templates |
 | Config questions | `docs/app_spec.md` § Configuration Architecture | `config.yaml` |
 
 

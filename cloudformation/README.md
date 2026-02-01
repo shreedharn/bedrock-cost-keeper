@@ -33,4 +33,4 @@ cd ../deployment/scripts
 ./deploy.sh dev
 ```
 
-For detailed deployment instructions, see: `docs/DEPLOYMENT.md`
+For detailed deployment instructions, see: `docs/deployment.md`

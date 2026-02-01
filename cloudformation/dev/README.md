@@ -45,7 +45,7 @@ cat .env.cloudformation >> ../../.env
 
 ### 3. Start Local Development
 
-See the [Getting Started Guide](../../docs/GETTING_STARTED.md) for complete setup instructions.
+See the [Getting Started Guide](../../docs/getting_started.md) for complete setup instructions.
 
 ### 4. Clean Up (Optional)
 
@@ -315,7 +315,7 @@ After deploying the stack:
 5. ✅ Start API service: `finch-compose up -d api`
 6. ✅ Run manual tests: `cd test-client && python manual_test.py`
 
-See [Getting Started Guide](../../docs/GETTING_STARTED.md) for detailed instructions.
+See [Getting Started Guide](../../docs/getting_started.md) for detailed instructions.
 
 ## References
 

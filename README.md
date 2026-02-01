@@ -117,7 +117,7 @@ For detailed client integration flow diagrams including Normal Mode and Tight Mo
 - **[API Reference](./docs/api_spec.md)** - Complete REST API documentation with examples
 
 ### Deployment & Operations
-- **[Deployment Guide](./docs/DEPLOYMENT.md)** - Step-by-step AWS deployment instructions
+- **[Deployment Guide](./docs/deployment.md)** - Step-by-step AWS deployment instructions
 - **[CloudFormation Templates](./cloudformation/README.md)** - IaC templates for AWS deployment
 
 ### Testing & Development
@@ -235,7 +235,7 @@ vi cloudformation/parameters/dev.json
 ./deploy.sh dev
 ```
 
-See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for complete deployment instructions.
+See [deployment.md](./docs/deployment.md) for complete deployment instructions.
 
 ## Usage Example
 
@@ -371,7 +371,7 @@ bedrock_metering/
 ├── test-client/                  # End-to-end test client
 │   └── bedrock_client.py         # Test client implementation
 ├── docs/                         # Documentation
-│   └── DEPLOYMENT.md             # Deployment guide
+│   └── deployment.md             # Deployment guide
 ├── config.yaml                   # Service configuration
 ├── requirements.txt              # Python dependencies
 └── run.py                        # Application entry point
@@ -393,7 +393,7 @@ bedrock_metering/
 
 See [Application Specification](./docs/app_spec.md) for configuration details.
 
-See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for detailed cost breakdown.
+See [deployment.md](./docs/deployment.md) for detailed cost breakdown.
 
 ## Security
 - JWT-based authentication with token revocation
@@ -413,7 +413,7 @@ See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for detailed cost breakdown.
 
 ## Troubleshooting
 
-See [DEPLOYMENT.md](./docs/DEPLOYMENT.md#troubleshooting) for detailed troubleshooting.
+See [deployment.md](./docs/deployment.md#troubleshooting) for detailed troubleshooting.
 
 
 ## License
