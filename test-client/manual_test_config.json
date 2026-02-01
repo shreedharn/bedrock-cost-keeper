@@ -1,0 +1,21 @@
+{
+  "service_url": "http://localhost:8080",
+  "aws_profile": "default",
+  "aws_region": "us-east-1",
+  "inference_profile_arn": "arn:aws:bedrock:us-east-1:123456789012:inference-profile/sample-app-nova-lite-dev",
+  "jwt_secret_name": "bedrock-cost-keeper/dev/jwt-secret",
+  "provisioning_api_key_secret_name": "bedrock-cost-keeper/dev/provisioning-api-key",
+  "test_org_name": "sample-org",
+  "test_org_timezone": "America/New_York",
+  "test_app_id": "sample-app",
+  "test_app_name": "Sample Application",
+  "test_prompt": "Explain what Amazon Bedrock is in one sentence.",
+  "model_id": "amazon.nova-lite-v1:0",
+  "profile_label": "nova-lite",
+  "quotas": {
+    "premium": 10000000,
+    "standard": 5000000,
+    "economy": 2000000
+  },
+  "model_ordering": ["premium", "standard", "economy"]
+}

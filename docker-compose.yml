@@ -10,6 +10,30 @@ services:
     networks:
       - bedrock-cost-keeper-net
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: bedrock-cost-keeper-api-local
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./src:/app/src:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+      - ~/.aws:/root/.aws:ro
+    environment:
+      - AWS_PROFILE=${AWS_PROFILE:-default}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    depends_on:
+      - dynamodb-local
+    networks:
+      - bedrock-cost-keeper-net
+
 networks:
   bedrock-cost-keeper-net:
     driver: bridge

@@ -1,0 +1,152 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Minimal AWS setup for Bedrock Cost Keeper local development'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  JWTSecretKey:
+    Type: String
+    NoEcho: true
+    Description: Base64-encoded JWT secret (32 bytes minimum)
+
+  ProvisioningAPIKey:
+    Type: String
+    NoEcho: true
+    Description: Base64-encoded provisioning API key (32 bytes minimum)
+
+Resources:
+  # Application Inference Profile for Amazon Nova Lite
+  SampleAppInferenceProfile:
+    Type: AWS::Bedrock::ApplicationInferenceProfile
+    Properties:
+      InferenceProfileName: !Sub 'sample-app-nova-lite-${Environment}'
+      ModelSource:
+        CopyFrom: arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0
+      Description: Amazon Nova Lite inference profile for sample-app development
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+        - Key: App
+          Value: sample-app
+
+  # KMS Key for Secrets Encryption
+  SecretsKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting Bedrock Cost Keeper secrets
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow Secrets Manager to use the key
+            Effect: Allow
+            Principal:
+              Service: secretsmanager.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'secretsmanager.${AWS::Region}.amazonaws.com'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+
+  SecretsKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/bedrock-cost-keeper-${Environment}'
+      TargetKeyId: !Ref SecretsKMSKey
+
+  # JWT Secret
+  JWTSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'bedrock-cost-keeper/${Environment}/jwt-secret'
+      Description: JWT signing secret for Bedrock Cost Keeper
+      KmsKeyId: !Ref SecretsKMSKey
+      SecretString: !Ref JWTSecretKey
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+        - Key: Purpose
+          Value: jwt-signing
+
+  # Provisioning API Key Secret
+  ProvisioningAPISecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'bedrock-cost-keeper/${Environment}/provisioning-api-key'
+      Description: Provisioning API key for Bedrock Cost Keeper
+      KmsKeyId: !Ref SecretsKMSKey
+      SecretString: !Ref ProvisioningAPIKey
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: bedrock-cost-keeper
+        - Key: Purpose
+          Value: provisioning-api
+
+Outputs:
+  InferenceProfileArn:
+    Description: ARN of the Application Inference Profile
+    Value: !GetAtt SampleAppInferenceProfile.InferenceProfileArn
+    Export:
+      Name: !Sub '${AWS::StackName}-InferenceProfileArn'
+
+  InferenceProfileId:
+    Description: ID of the Application Inference Profile
+    Value: !GetAtt SampleAppInferenceProfile.InferenceProfileId
+    Export:
+      Name: !Sub '${AWS::StackName}-InferenceProfileId'
+
+  JWTSecretArn:
+    Description: ARN of JWT secret in Secrets Manager
+    Value: !Ref JWTSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-JWTSecretArn'
+
+  JWTSecretName:
+    Description: Name of JWT secret in Secrets Manager
+    Value: !Sub 'bedrock-cost-keeper/${Environment}/jwt-secret'
+
+  ProvisioningAPISecretArn:
+    Description: ARN of Provisioning API secret in Secrets Manager
+    Value: !Ref ProvisioningAPISecret
+    Export:
+      Name: !Sub '${AWS::StackName}-ProvisioningAPISecretArn'
+
+  ProvisioningAPISecretName:
+    Description: Name of Provisioning API secret in Secrets Manager
+    Value: !Sub 'bedrock-cost-keeper/${Environment}/provisioning-api-key'
+
+  KMSKeyArn:
+    Description: ARN of KMS key for secrets encryption
+    Value: !GetAtt SecretsKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyArn'
+
+  KMSKeyId:
+    Description: ID of KMS key for secrets encryption
+    Value: !Ref SecretsKMSKey
