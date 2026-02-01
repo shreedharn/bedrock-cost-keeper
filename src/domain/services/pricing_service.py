@@ -131,7 +131,7 @@ class PricingService:
             ...     input_price_per_1m=3000000,
             ...     output_price_per_1m=15000000
             ... )
-            16500000  # $16.50
+            16500  # 16,500 micro-USD = $0.0165
         """
         input_cost_micros = (input_tokens * input_price_per_1m) // 1_000_000
         output_cost_micros = (output_tokens * output_price_per_1m) // 1_000_000

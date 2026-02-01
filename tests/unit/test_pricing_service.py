@@ -27,8 +27,8 @@ def test_config():
             'standard': {
                 'type': 'model',
                 'id': 'amazon.nova-2-lite-v1:0',
-                'input_price_usd_micros_per_1m': 60000,
-                'output_price_usd_micros_per_1m': 240000
+                'input_price_usd_micros_per_1m': 330000,
+                'output_price_usd_micros_per_1m': 2750000
             },
             'economy': {
                 'type': 'model',
@@ -66,8 +66,8 @@ class TestGetPricingFromConfig:
         )
 
         assert pricing is not None
-        assert pricing['input_price_usd_micros_per_1m'] == 60000
-        assert pricing['output_price_usd_micros_per_1m'] == 240000
+        assert pricing['input_price_usd_micros_per_1m'] == 330000
+        assert pricing['output_price_usd_micros_per_1m'] == 2750000
 
     def test_get_pricing_missing_model_returns_none(self, pricing_service):
         """Test that missing model returns None."""

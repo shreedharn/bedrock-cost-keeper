@@ -121,12 +121,12 @@ model_labels:
   standard:
     type: "model"
     id: "amazon.nova-2-lite-v1:0"
-    description: "Nova Lite - Standard tier, fast and cost-effective"
+    description: "Nova 2 Lite - Standard tier, fast and cost-effective"
     tier: standard
     family: nova
     # FALLBACK pricing (Pricing API is primary source, these values used only if API down)
-    input_price_usd_micros_per_1m: 60000      # $0.06 per 1M input tokens
-    output_price_usd_micros_per_1m: 240000    # $0.24 per 1M output tokens
+    input_price_usd_micros_per_1m: 330000     # $0.33 per 1M input tokens
+    output_price_usd_micros_per_1m: 2750000   # $2.75 per 1M output tokens
 
   economy:
     type: "model"
