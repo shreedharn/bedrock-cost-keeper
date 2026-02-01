@@ -93,6 +93,3 @@ All prices shown are for the **us-east-1** region. Pricing may vary by AWS regio
 
 
 ---
-
-*Last Updated: 2026-02-01*
-*Source: Amazon Bedrock Pricing (us-east-1)*
