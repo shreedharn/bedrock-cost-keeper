@@ -96,6 +96,8 @@ credentials.json
 # CloudFormation
 cloudformation/parameters/*-local.json
 cloudformation/parameters/*-secrets.json
+cloudformation/**/.env.cloudformation
+cloudformation/**/*.backup
 
 # Test outputs
 test_output/

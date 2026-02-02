@@ -134,3 +134,9 @@ Whenever creating or updating config files for development and testing, use foll
 Use us-east-1 as default region.
 
 ---
+After executing a task, you don't need to create a comprehensive summary document unless you are asked to produce. I will git diff and find the difference. Just
+provide a short summary in few bullets on what you accomplished.
+
+---
+
+Important: Never store secrets or AWS Account number in a file that will be committed. Such configurations should be in a separate file with .example file with dummy values. File with secrets for local testing should be added to .gitignore. In production, secrets should be stored in AWS Secrets Manager.

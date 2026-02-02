@@ -5,7 +5,71 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Show usage information
+show_usage() {
+    cat << EOF
+${GREEN}Bedrock Cost Keeper - CloudFormation Deployment (v2)${NC}
+
+${BLUE}Usage:${NC}
+    $0 [OPTIONS]
+
+${BLUE}Options:${NC}
+    --tag KEY=VALUE         Add a tag to the CloudFormation stack and all resources
+                           Can be specified multiple times
+                           Example: --tag Environment=dev --tag caylent:owner=user@example.com
+
+    --region REGION        AWS region (default: us-east-1 or \$AWS_REGION)
+
+    --help, -h             Show this help message
+
+${BLUE}Note:${NC}
+    This version uses create-stack/update-stack directly instead of 'deploy'
+    to avoid tag parsing issues with special characters like colons.
+
+EOF
+    exit 0
+}
+
+# Initialize variables
+TAGS_ARRAY=()
+
+# Parse command-line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --tag)
+            if [[ -z "$2" ]] || [[ "$2" == --* ]]; then
+                echo -e "${RED}Error: --tag requires a KEY=VALUE argument${NC}"
+                exit 1
+            fi
+            # Validate tag format
+            if [[ ! "$2" =~ ^[^=]+=[^=]*$ ]]; then
+                echo -e "${RED}Error: Invalid tag format. Use KEY=VALUE${NC}"
+                exit 1
+            fi
+            TAGS_ARRAY+=("$2")
+            shift 2
+            ;;
+        --region)
+            if [[ -z "$2" ]] || [[ "$2" == --* ]]; then
+                echo -e "${RED}Error: --region requires a value${NC}"
+                exit 1
+            fi
+            AWS_REGION="$2"
+            shift 2
+            ;;
+        --help|-h)
+            show_usage
+            ;;
+        *)
+            echo -e "${RED}Error: Unknown option: $1${NC}"
+            echo "Use --help to see available options"
+            exit 1
+            ;;
+    esac
+done
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Bedrock Cost Keeper - Minimal AWS Setup${NC}"
@@ -38,7 +102,17 @@ if ! aws sts get-caller-identity &> /dev/null; then
 fi
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-echo -e "${GREEN}✓ AWS Account ID: $ACCOUNT_ID${NC}\n"
+echo -e "${GREEN}✓ AWS Account ID: $ACCOUNT_ID${NC}"
+echo -e "${GREEN}✓ Region: $REGION${NC}"
+
+# Display tags if provided
+if [ ${#TAGS_ARRAY[@]} -gt 0 ]; then
+    echo -e "${GREEN}✓ Tags to apply:${NC}"
+    for tag in "${TAGS_ARRAY[@]}"; do
+        echo -e "  ${BLUE}• $tag${NC}"
+    done
+fi
+echo ""
 
 # Generate secrets
 echo -e "${YELLOW}Generating secrets...${NC}"
@@ -47,38 +121,90 @@ PROV_API_KEY=$(openssl rand -base64 32)
 echo -e "${GREEN}✓ Secrets generated${NC}\n"
 
 # Check if stack already exists
+OPERATION="create-stack"
 if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGION" &> /dev/null; then
     echo -e "${YELLOW}Stack $STACK_NAME already exists. Updating...${NC}"
-    OPERATION="update"
+    OPERATION="update-stack"
 else
     echo -e "${YELLOW}Creating new stack $STACK_NAME...${NC}"
-    OPERATION="create"
 fi
 
 # Deploy stack
 echo -e "${YELLOW}Deploying CloudFormation stack...${NC}"
-aws cloudformation deploy \
-  --template-file "$TEMPLATE_FILE" \
-  --stack-name "$STACK_NAME" \
-  --parameter-overrides \
-    Environment="$ENVIRONMENT" \
-    JWTSecretKey="$JWT_SECRET" \
-    ProvisioningAPIKey="$PROV_API_KEY" \
-  --capabilities CAPABILITY_IAM \
-  --region "$REGION"
 
-if [ $? -eq 0 ]; then
-    echo -e "\n${GREEN}✓ Stack deployed successfully!${NC}\n"
+# Build tags in JSON format for create-stack/update-stack
+TAGS_JSON='['
+for i in "${!TAGS_ARRAY[@]}"; do
+    tag="${TAGS_ARRAY[$i]}"
+    KEY="${tag%%=*}"
+    VALUE="${tag#*=}"
+
+    if [ $i -gt 0 ]; then
+        TAGS_JSON+=','
+    fi
+    # Properly escape JSON strings
+    KEY_ESCAPED=$(echo -n "$KEY" | jq -Rs .)
+    VALUE_ESCAPED=$(echo -n "$VALUE" | jq -Rs .)
+    TAGS_JSON+="{\"Key\":$KEY_ESCAPED,\"Value\":$VALUE_ESCAPED}"
+done
+TAGS_JSON+=']'
+
+# Debug: Show the tags JSON
+echo -e "${BLUE}Tags JSON:${NC}"
+echo "$TAGS_JSON" | jq .
+echo ""
+
+# Build parameters JSON
+PARAMS_JSON="[
+  {\"ParameterKey\":\"Environment\",\"ParameterValue\":\"$ENVIRONMENT\"},
+  {\"ParameterKey\":\"JWTSecretKey\",\"ParameterValue\":\"$JWT_SECRET\"},
+  {\"ParameterKey\":\"ProvisioningAPIKey\",\"ParameterValue\":\"$PROV_API_KEY\"}
+]"
+
+# Execute deployment
+if [ "$OPERATION" = "create-stack" ]; then
+    aws cloudformation create-stack \
+      --stack-name "$STACK_NAME" \
+      --template-body "file://$TEMPLATE_FILE" \
+      --parameters "$PARAMS_JSON" \
+      --tags "$TAGS_JSON" \
+      --capabilities CAPABILITY_IAM \
+      --region "$REGION"
 else
-    echo -e "\n${RED}✗ Stack deployment failed${NC}"
+    aws cloudformation update-stack \
+      --stack-name "$STACK_NAME" \
+      --template-body "file://$TEMPLATE_FILE" \
+      --parameters "$PARAMS_JSON" \
+      --tags "$TAGS_JSON" \
+      --capabilities CAPABILITY_IAM \
+      --region "$REGION" || {
+        ERROR_MSG=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGION" --query 'Stacks[0].StackStatus' --output text 2>&1)
+        if [[ "$ERROR_MSG" == *"No updates are to be performed"* ]] || aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGION" --query 'Stacks[0].StackStatus' --output text 2>&1 | grep -q "UPDATE_COMPLETE"; then
+            echo -e "${YELLOW}No updates needed${NC}"
+        else
+            exit 1
+        fi
+    }
+fi
+
+if [ $? -eq 0 ] || [ "$?" = "0" ]; then
+    echo -e "\n${GREEN}✓ Stack operation initiated successfully!${NC}\n"
+else
+    echo -e "\n${RED}✗ Stack operation failed${NC}"
     exit 1
 fi
 
 # Wait for stack to be ready
 echo -e "${YELLOW}Waiting for stack to be ready...${NC}"
-aws cloudformation wait stack-${OPERATION}-complete \
-  --stack-name "$STACK_NAME" \
-  --region "$REGION"
+if [ "$OPERATION" = "create-stack" ]; then
+    aws cloudformation wait stack-create-complete \
+      --stack-name "$STACK_NAME" \
+      --region "$REGION"
+else
+    aws cloudformation wait stack-update-complete \
+      --stack-name "$STACK_NAME" \
+      --region "$REGION" 2>/dev/null || true
+fi
 
 # Fetch and display outputs
 echo -e "\n${GREEN}========================================${NC}"
@@ -125,24 +251,6 @@ echo -e "${YELLOW}  Copy these values to your .env file in the project root${NC}
 
 cat .env.cloudformation
 
-# Update test config
-echo -e "\n${GREEN}========================================${NC}"
-echo -e "${GREEN}Test Configuration${NC}"
-echo -e "${GREEN}========================================${NC}\n"
-
-TEST_CONFIG="../../test-client/manual_test_config.json"
-if [ -f "$TEST_CONFIG" ]; then
-    echo -e "${YELLOW}Updating $TEST_CONFIG...${NC}"
-    # Use jq to update the config file
-    TMP_FILE=$(mktemp)
-    jq --arg arn "$INFERENCE_PROFILE_ARN" \
-       --arg jwt "$JWT_SECRET_NAME" \
-       --arg prov "$PROV_API_SECRET_NAME" \
-       '.inference_profile_arn = $arn | .jwt_secret_name = $jwt | .provisioning_api_key_secret_name = $prov' \
-       "$TEST_CONFIG" > "$TMP_FILE" && mv "$TMP_FILE" "$TEST_CONFIG"
-    echo -e "${GREEN}✓ Test config updated${NC}\n"
-fi
-
 # Verify resources
 echo -e "\n${GREEN}========================================${NC}"
 echo -e "${GREEN}Verifying Resources${NC}"
@@ -179,9 +287,17 @@ echo -e "\n${GREEN}========================================${NC}"
 echo -e "${GREEN}Deployment Complete!${NC}"
 echo -e "${GREEN}========================================${NC}\n"
 
+# Show applied tags
+if [ ${#TAGS_ARRAY[@]} -gt 0 ]; then
+    echo -e "${GREEN}Applied tags to stack and resources:${NC}"
+    for tag in "${TAGS_ARRAY[@]}"; do
+        echo -e "  ${BLUE}✓ $tag${NC}"
+    done
+    echo ""
+fi
+
 echo -e "${YELLOW}Next steps:${NC}"
 echo "1. Copy values from .env.cloudformation to your project .env file"
-echo "2. Update test-client/manual_test_config.json (already updated)"
-echo "3. Start local development environment: ./scripts/dynamodb.sh start"
-echo "4. Run manual tests: cd test-client && python manual_test.py"
+echo "2. Start local development environment: ./scripts/dynamodb.sh start"
+echo "3. Run tests: cd test-client && python manual_test.py"
 echo ""

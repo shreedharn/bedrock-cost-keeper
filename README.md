@@ -156,7 +156,7 @@ For detailed client integration flow diagrams including Normal Mode and Tight Mo
 4. **Run database migrations** (if using PostgreSQL)
    ```bash
    # For local testing with DynamoDB Local
-   docker run -p 8000:8000 amazon/dynamodb-local
+   finch run -p 8000:8000 amazon/dynamodb-local
    ```
 
 5. **Start the service**
@@ -201,14 +201,14 @@ python bedrock_client.py
 
 See [Integration Testing Guide](./docs/integration_testing.md) for detailed testing instructions.
 
-### Local Development with Docker
+### Local Development with Finch
 
 ```bash
-# Build Docker image
-docker build -t bedrock-cost-keeper -f deployment/Dockerfile .
+# Build image
+finch build -t bedrock-cost-keeper -f deployment/Dockerfile .
 
 # Run container
-docker run -p 8000:8000 \
+finch run -p 8000:8000 \
   -e DEBUG=true \
   -e AWS_REGION=us-east-1 \
   bedrock-cost-keeper

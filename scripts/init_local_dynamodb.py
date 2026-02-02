@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """Initialize local DynamoDB tables for testing."""
-
-import asyncio
 import sys
+import argparse
+import asyncio
 from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import aioboto3
 from botocore.exceptions import ClientError
 
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 async def create_tables():
     """Create all required DynamoDB tables in local instance."""
@@ -250,7 +248,6 @@ async def clear_tables():
 
 async def main():
     """Main execution."""
-    import argparse
 
     parser = argparse.ArgumentParser(description='Manage local DynamoDB for testing')
     parser.add_argument('action', choices=['init', 'seed', 'clear', 'reset'],
