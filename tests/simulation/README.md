@@ -15,7 +15,7 @@ Comprehensive end-to-end tests that simulate real usage scenarios to verify:
 
 2. **Initialize tables and seed test data**:
    ```bash
-   python scripts/init_local_dynamodb.py create
+   python scripts/init_local_dynamodb.py init
    python scripts/init_local_dynamodb.py seed
    ```
 
@@ -148,7 +148,7 @@ Error: Table 'bedrock-cost-keeper-config' not found
 ```
 **Solution**: Run table creation and seeding:
 ```bash
-python scripts/init_local_dynamodb.py create
+python scripts/init_local_dynamodb.py init
 python scripts/init_local_dynamodb.py seed
 ```
 

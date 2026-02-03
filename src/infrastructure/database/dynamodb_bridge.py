@@ -40,7 +40,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'pk': f'ORG#{org_id}', 'sk': 'CONFIG'}
+                Key={'org_key': f'ORG#{org_id}', 'resource_key': ''}
             )
             return response.get('Item')
         except ClientError:
@@ -53,7 +53,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'pk': f'ORG#{org_id}', 'sk': f'APP#{app_id}'}
+                Key={'org_key': f'ORG#{org_id}', 'resource_key': f'APP#{app_id}'}
             )
             return response.get('Item')
         except ClientError:
@@ -65,8 +65,8 @@ class DynamoDBBridge(DatabaseBridge):
         table = await dynamodb.Table(settings.dynamodb_config_table)
 
         item = {
-            'PK': f'ORG#{org_id}',
-            'SK': '',
+            'org_key': f'ORG#{org_id}',
+            'resource_key': '',
             **config,
             'updated_at_epoch': int(time.time())
         }
@@ -79,8 +79,8 @@ class DynamoDBBridge(DatabaseBridge):
         table = await dynamodb.Table(settings.dynamodb_config_table)
 
         item = {
-            'PK': f'ORG#{org_id}',
-            'SK': f'APP#{app_id}',
+            'org_key': f'ORG#{org_id}',
+            'resource_key': f'APP#{app_id}',
             **config,
             'updated_at_epoch': int(time.time())
         }
@@ -96,7 +96,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'pk': scope, 'sk': day}
+                Key={'scope_key': scope, 'date_key': day}
             )
             return response.get('Item')
         except ClientError:
@@ -117,8 +117,8 @@ class DynamoDBBridge(DatabaseBridge):
 
         now = int(time.time())
         item = {
-            'PK': scope,
-            'SK': day,
+            'scope_key': scope,
+            'date_key': day,
             'active_model_label': active_model_label,
             'active_model_index': active_model_index,
             'reason': reason,
@@ -164,7 +164,7 @@ class DynamoDBBridge(DatabaseBridge):
         # Use conditional expression for idempotency - only update if request_id not in set
         try:
             await table.update_item(
-                Key={'pk': pk, 'sk': day},
+                Key={'shard_key': pk, 'date_key': day},
                 UpdateExpression='ADD cost_usd_micros :c, input_tokens :i, output_tokens :o, requests :r, request_ids :rid SET updated_at_epoch = :t',
                 ConditionExpression='NOT contains(request_ids, :req_id) OR attribute_not_exists(request_ids)',
                 ExpressionAttributeValues={
@@ -197,7 +197,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         # Build keys for batch get
         keys = [
-            {'PK': f'{scope}#LABEL#{model_label}#SH#{i}', 'sk': day}
+            {'shard_key': f'{scope}#LABEL#{model_label}#SH#{i}', 'date_key': day}
             for i in range(shard_count)
         ]
 
@@ -223,7 +223,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'pk': f'{scope}#LABEL#{model_label}', 'sk': day}
+                Key={'usage_key': f'{scope}#LABEL#{model_label}', 'date_key': day}
             )
             return response.get('Item')
         except ClientError:
@@ -240,7 +240,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         # Build keys for batch get
         keys = [
-            {'pk': f'{scope}#LABEL#{label}', 'sk': day}
+            {'usage_key': f'{scope}#LABEL#{label}', 'date_key': day}
             for label in model_labels
         ]
 
@@ -255,8 +255,8 @@ class DynamoDBBridge(DatabaseBridge):
         # Map items by model label
         result = {}
         for item in items:
-            # Extract label from pk
-            pk_parts = item['pk'].split('#LABEL#')
+            # Extract label from usage_key
+            pk_parts = item['usage_key'].split('#LABEL#')
             if len(pk_parts) == 2:
                 label = pk_parts[1]
                 result[label] = item
@@ -278,8 +278,8 @@ class DynamoDBBridge(DatabaseBridge):
         table = await dynamodb.Table(settings.dynamodb_daily_total_table)
 
         item = {
-            'PK': f'{scope}#LABEL#{model_label}',
-            'SK': day,
+            'usage_key': f'{scope}#LABEL#{model_label}',
+            'date_key': day,
             'cost_usd_micros': cost_usd_micros,
             'input_tokens': input_tokens,
             'output_tokens': output_tokens,
@@ -310,13 +310,13 @@ class DynamoDBBridge(DatabaseBridge):
         dynamodb = await self._get_dynamodb()
         table = await dynamodb.Table(settings.dynamodb_pricing_cache_table)
 
-        # Build key - include region in sk if provided
-        pk = bedrock_model_id
-        sk = f"{date}#{region}" if region else date
+        # Build key - include region in price_key if provided
+        model_id_val = bedrock_model_id
+        price_key_val = f"{date}#{region}" if region else date
 
         try:
             response = await table.get_item(
-                Key={'pk': pk, 'sk': sk}
+                Key={'model_id': model_id_val, 'price_key': price_key_val}
             )
             return response.get('Item')
         except ClientError:
@@ -333,8 +333,8 @@ class DynamoDBBridge(DatabaseBridge):
         table = await dynamodb.Table(settings.dynamodb_pricing_cache_table)
 
         item = {
-            'PK': bedrock_model_id,
-            'SK': date,
+            'model_id': bedrock_model_id,
+            'price_key': date,
             **pricing_data,
             'fetched_at_epoch': int(time.time())
         }
@@ -350,7 +350,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'pk': token_jti}
+                Key={'token_jti': token_jti}
             )
             return 'Item' in response
         except ClientError:
@@ -368,7 +368,7 @@ class DynamoDBBridge(DatabaseBridge):
         table = await dynamodb.Table(settings.dynamodb_revoked_tokens_table)
 
         item = {
-            'PK': token_jti,
+            'token_jti': token_jti,
             'token_type': token_type,
             'client_id': client_id,
             'revoked_at_epoch': int(time.time()),
@@ -394,7 +394,7 @@ class DynamoDBBridge(DatabaseBridge):
         table = await dynamodb.Table(settings.dynamodb_secret_retrieval_tokens_table)
 
         item = {
-            'PK': token_uuid,
+            'token': token_uuid,
             'org_id': org_id,
             'secret_type': secret_type,
             'client_id': client_id,
@@ -417,7 +417,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.update_item(
-                Key={'pk': token_uuid},
+                Key={'token': token_uuid},
                 UpdateExpression='SET used = :true, used_at_epoch = :now',
                 ConditionExpression='used = :false AND expires_at_epoch > :now',
                 ExpressionAttributeValues={
@@ -460,8 +460,8 @@ class DynamoDBBridge(DatabaseBridge):
         table = await dynamodb.Table(settings.dynamodb_config_table)
 
         item = {
-            'pk': f'ORG#{org_id}#APP#{app_id}',
-            'sk': f'PROFILE#{profile_label}',
+            'org_key': f'ORG#{org_id}#APP#{app_id}',
+            'resource_key': f'PROFILE#{profile_label}',
             'inference_profile_arn': inference_profile_arn,
             'model_arns': model_arns,
             'description': description,
@@ -493,8 +493,8 @@ class DynamoDBBridge(DatabaseBridge):
         try:
             response = await table.get_item(
                 Key={
-                    'pk': f'ORG#{org_id}#APP#{app_id}',
-                    'sk': f'PROFILE#{profile_label}'
+                    'org_key': f'ORG#{org_id}#APP#{app_id}',
+                    'resource_key': f'PROFILE#{profile_label}'
                 }
             )
             return response.get('Item')
@@ -520,7 +520,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.query(
-                KeyConditionExpression='pk = :pk AND begins_with(sk, :sk_prefix)',
+                KeyConditionExpression='org_key = :pk AND begins_with(resource_key, :sk_prefix)',
                 ExpressionAttributeValues={
                     ':pk': f'ORG#{org_id}#APP#{app_id}',
                     ':sk_prefix': 'PROFILE#'

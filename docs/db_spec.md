@@ -59,22 +59,22 @@ This database design supports the Bedrock Price Keeper REST service with the fol
 
 #### Primary Key
 
-- **PK** (string): `ORG#{org_id}`
-- **SK** (string): `""` (empty) for org config, or `APP#{app_id}` for app config
+- **org_key** (string): `ORG#{org_id}` - Organization partition, may include app for inference profiles
+- **resource_key** (string): `""` (empty) for org config, or `APP#{app_id}` for app config, or `PROFILE#{profile_label}` for inference profiles
 
 #### Access Patterns
 
-1. Get org config: `GetItem(PK="ORG#{org_id}", SK="")`
-2. Get app config: `GetItem(PK="ORG#{org_id}", SK="APP#{app_id}")`
-3. List all apps for org: `Query(PK="ORG#{org_id}", SK begins_with "APP#")`
-4. Get inference profile: `GetItem(PK="ORG#{org_id}#APP#{app_id}", SK="PROFILE#{profile_label}")`
+1. Get org config: `GetItem(org_key="ORG#{org_id}", resource_key="")`
+2. Get app config: `GetItem(org_key="ORG#{org_id}", resource_key="APP#{app_id}")`
+3. List all apps for org: `Query(org_key="ORG#{org_id}", resource_key begins_with "APP#")`
+4. Get inference profile: `GetItem(org_key="ORG#{org_id}#APP#{app_id}", resource_key="PROFILE#{profile_label}")`
 
 #### Org Config Item
 
 **Key:**
 ```
-PK: "ORG#550e8400-e29b-41d4-a716-446655440000"
-SK: ""
+org_key: "ORG#550e8400-e29b-41d4-a716-446655440000"
+resource_key: ""
 ```
 
 **Attributes:**
@@ -99,8 +99,8 @@ SK: ""
 **Example:**
 ```json
 {
-  "PK": "ORG#550e8400-e29b-41d4-a716-446655440000",
-  "SK": "",
+  "org_key": "ORG#550e8400-e29b-41d4-a716-446655440000",
+  "resource_key": "",
   "org_name": "sample_corp",
   "timezone": "America/New_York",
   "quota_scope": "APP",
@@ -128,8 +128,8 @@ SK: ""
 
 **Key:**
 ```
-PK: "ORG#550e8400-e29b-41d4-a716-446655440000"
-SK: "APP#app-production-api"
+org_key: "ORG#550e8400-e29b-41d4-a716-446655440000"
+resource_key: "APP#app-production-api"
 ```
 
 **Attributes:**
@@ -154,8 +154,8 @@ SK: "APP#app-production-api"
 **Example:**
 ```json
 {
-  "PK": "ORG#550e8400-e29b-41d4-a716-446655440000",
-  "SK": "APP#app-production-api",
+  "org_key": "ORG#550e8400-e29b-41d4-a716-446655440000",
+  "resource_key": "APP#app-production-api",
   "app_name": "Production API",
   "model_ordering": ["premium", "standard"],
   "quotas": {
@@ -177,8 +177,8 @@ SK: "APP#app-production-api"
 
 **Key:**
 ```
-PK: "ORG#{org_id}#APP#{app_id}"
-SK: "PROFILE#{profile_label}"
+org_key: "ORG#{org_id}#APP#{app_id}"
+resource_key: "PROFILE#{profile_label}"
 ```
 
 **Attributes:**
@@ -191,8 +191,8 @@ SK: "PROFILE#{profile_label}"
 **Example:**
 ```json
 {
-  "PK": "ORG#550e8400-e29b-41d4-a716-446655440000#APP#app-production-api",
-  "SK": "PROFILE#tenant-a-premium",
+  "org_key": "ORG#550e8400-e29b-41d4-a716-446655440000#APP#app-production-api",
+  "resource_key": "PROFILE#tenant-a-premium",
   "profile_label": "tenant-a-premium",
   "inference_profile_arn": "arn:aws:bedrock:us-east-1:123456789012:inference-profile/tenant-a",
   "description": "Premium profile for Tenant A",
@@ -237,21 +237,21 @@ When a `model_label` is submitted in a usage request:
 
 #### Primary Key
 
-- **PK** (string): Scope identifier (org or org+app)
-- **SK** (string): `DAY#{day}` for time-series organization
+- **scope_key** (string): Complete scope identifier (org or org+app) - determines where sticky state applies
+- **date_key** (string): `DAY#{day}` format for time-series organization
 
 #### Key Patterns
 
 **Org-scoped:**
 ```
-PK: "ORG#550e8400-e29b-41d4-a716-446655440000"
-SK: "DAY#20260123"
+scope_key: "ORG#550e8400-e29b-41d4-a716-446655440000"
+date_key: "DAY#20260123"
 ```
 
 **App-scoped:**
 ```
-PK: "ORG#550e8400-e29b-41d4-a716-446655440000#APP#app-production-api"
-SK: "DAY#20260123"
+scope_key: "ORG#550e8400-e29b-41d4-a716-446655440000#APP#app-production-api"
+date_key: "DAY#20260123"
 ```
 
 **Note**: App-scoped keys MUST include org_id to prevent collisions when different orgs use the same app_id.
@@ -268,8 +268,8 @@ SK: "DAY#20260123"
 **Example:**
 ```json
 {
-  "PK": "ORG#550e8400-e29b-41d4-a716-446655440000",
-  "SK": "DAY#20260123",
+  "scope_key": "ORG#550e8400-e29b-41d4-a716-446655440000",
+  "date_key": "DAY#20260123",
   "active_model_label": "standard",
   "active_model_index": 1,
   "reason": "QUOTA_EXCEEDED",
@@ -281,8 +281,8 @@ SK: "DAY#20260123"
 
 #### Access Pattern
 
-- **Check sticky state**: `GetItem(PK={scope}, SK="DAY#{day}")`
-- **Set sticky state**: `PutItem(PK={scope}, SK="DAY#{day}", ...)` with conditional expression:
+- **Check sticky state**: `GetItem(scope_key={scope}, date_key="DAY#{day}")`
+- **Set sticky state**: `PutItem(scope_key={scope}, date_key="DAY#{day}", ...)` with conditional expression:
   ```
   attribute_not_exists(active_model_label) OR active_model_index < :new_index
   ```
@@ -303,21 +303,21 @@ SK: "DAY#20260123"
 
 #### Primary Key
 
-- **PK** (string): Scope + model label + shard identifier
-- **SK** (string): `DAY#{day}` for time-series organization
+- **shard_key** (string): Composite key identifying the specific usage shard: `{scope}#LABEL#{model_label}#SH#{shard_id}`
+- **date_key** (string): `DAY#{day}` format for time-series organization
 
 #### Key Patterns
 
 **Org-scoped, Model "premium", Shard 0:**
 ```
-PK: "ORG#550e8400-e29b-41d4-a716-446655440000#LABEL#premium#SH#0"
-SK: "DAY#20260123"
+shard_key: "ORG#550e8400-e29b-41d4-a716-446655440000#LABEL#premium#SH#0"
+date_key: "DAY#20260123"
 ```
 
 **App-scoped, Model "standard", Shard 3:**
 ```
-PK: "ORG#550e8400-e29b-41d4-a716-446655440000#APP#app-production-api#LABEL#standard#SH#3"
-SK: "DAY#20260123"
+shard_key: "ORG#550e8400-e29b-41d4-a716-446655440000#APP#app-production-api#LABEL#standard#SH#3"
+date_key: "DAY#20260123"
 ```
 
 **Note**: App-scoped keys MUST include org_id to prevent collisions when different orgs use the same app_id.
@@ -334,8 +334,8 @@ SK: "DAY#20260123"
 **Example:**
 ```json
 {
-  "PK": "ORG#550e8400-e29b-41d4-a716-446655440000#LABEL#premium#SH#0",
-  "SK": "DAY#20260123",
+  "shard_key": "ORG#550e8400-e29b-41d4-a716-446655440000#LABEL#premium#SH#0",
+  "date_key": "DAY#20260123",
   "cost_usd_micros": 1250000,
   "input_tokens": 150000,
   "output_tokens": 80000,
@@ -360,8 +360,8 @@ SK: "DAY#20260123"
 ```
 UpdateItem:
   Key:
-    PK = "{scope}#LABEL#{label}#SH#{shard_id}"
-    SK = "DAY#{day}"
+    shard_key = "{scope}#LABEL#{label}#SH#{shard_id}"
+    date_key = "DAY#{day}"
   UpdateExpression: "ADD cost_usd_micros :c, input_tokens :i, output_tokens :o, requests :r SET updated_at_epoch = :t"
   ExpressionAttributeValues: computed values
 ```
@@ -395,21 +395,21 @@ shard_id = hash(request_id) % agg_shard_count
 
 #### Primary Key
 
-- **PK** (string): Scope + model label identifier
-- **SK** (string): `DAY#{day}` for time-series organization
+- **usage_key** (string): Composite key identifying the usage metric: `{scope}#LABEL#{model_label}`
+- **date_key** (string): `DAY#{day}` format for time-series organization
 
 #### Key Patterns
 
 **Org-scoped, Model "premium":**
 ```
-PK: "ORG#550e8400-e29b-41d4-a716-446655440000#LABEL#premium"
-SK: "DAY#20260123"
+usage_key: "ORG#550e8400-e29b-41d4-a716-446655440000#LABEL#premium"
+date_key: "DAY#20260123"
 ```
 
 **App-scoped, Model "standard":**
 ```
-PK: "ORG#550e8400-e29b-41d4-a716-446655440000#APP#app-production-api#LABEL#standard"
-SK: "DAY#20260123"
+usage_key: "ORG#550e8400-e29b-41d4-a716-446655440000#APP#app-production-api#LABEL#standard"
+date_key: "DAY#20260123"
 ```
 
 **Note**: App-scoped keys MUST include org_id to prevent collisions when different orgs use the same app_id.
@@ -425,8 +425,8 @@ SK: "DAY#20260123"
 **Example:**
 ```json
 {
-  "PK": "ORG#550e8400-e29b-41d4-a716-446655440000#LABEL#premium",
-  "SK": "DAY#20260123",
+  "usage_key": "ORG#550e8400-e29b-41d4-a716-446655440000#LABEL#premium",
+  "date_key": "DAY#20260123",
   "cost_usd_micros": 9500000,
   "input_tokens": 1200000,
   "output_tokens": 650000,
@@ -441,8 +441,8 @@ SK: "DAY#20260123"
 ```
 GetItem:
   Key:
-    PK = "{scope}#LABEL#{label}"
-    SK = "DAY#{today}"
+    usage_key = "{scope}#LABEL#{label}"
+    date_key = "DAY#{today}"
   Returns: cost_usd_micros (compare to quota)
 ```
 
@@ -450,8 +450,8 @@ GetItem:
 ```
 BatchGetItem:
   Keys: [
-    {PK = "{scope}#LABEL#{label1}", SK = "DAY#{today}"},
-    {PK = "{scope}#LABEL#{label2}", SK = "DAY#{today}"},
+    {usage_key = "{scope}#LABEL#{label1}", date_key = "DAY#{today}"},
+    {usage_key = "{scope}#LABEL#{label2}", date_key = "DAY#{today}"},
     ...
   ]
   Returns: Spend for each model in fallback chain
@@ -465,10 +465,10 @@ BatchGetItem:
    ```
    BatchGetItem:
      Keys: [
-       {PK = "{scope}#LABEL#{label}#SH#0", SK = "DAY#{day}"},
-       {PK = "{scope}#LABEL#{label}#SH#1", SK = "DAY#{day}"},
+       {shard_key = "{scope}#LABEL#{label}#SH#0", date_key = "DAY#{day}"},
+       {shard_key = "{scope}#LABEL#{label}#SH#1", date_key = "DAY#{day}"},
        ...
-       {PK = "{scope}#LABEL#{label}#SH#N-1", SK = "DAY#{day}"}
+       {shard_key = "{scope}#LABEL#{label}#SH#N-1", date_key = "DAY#{day}"}
      ]
    ```
 
@@ -484,8 +484,8 @@ BatchGetItem:
    ```
    PutItem:
      Key:
-       PK = "{scope}#LABEL#{label}"
-       SK = "DAY#{day}"
+       usage_key = "{scope}#LABEL#{label}"
+       date_key = "DAY#{day}"
      Item: {aggregated totals}
    ```
 
@@ -494,12 +494,12 @@ BatchGetItem:
 - Even with 100 concurrent service instances, write rate stays low
 - Controlled by aggregator schedule, not request volume
 
-**Benefits of time-series design (DAY as sort key):**
+**Benefits of time-series design (date_key as sort key):**
 - Enables efficient historical queries via Query operations
 - All days for a scope logically grouped under one partition key
 - Follows DynamoDB time-series best practices
 - No performance impact on current operations (GetItem still single-item lookup)
-- Future analytics: `Query(PK, SK BETWEEN "DAY#20260101" AND "DAY#20260130")`
+- Future analytics: `Query(usage_key, date_key BETWEEN "DAY#20260101" AND "DAY#20260130")`
 
 ---
 
@@ -511,21 +511,21 @@ BatchGetItem:
 
 #### Primary Key
 
-- **PK** (string): `{bedrock_model_id}`
-- **SK** (string): `{yyyy-mm-dd}` or `{yyyy-mm-dd}#{region}` for region-specific pricing
+- **model_id** (string): The Bedrock model identifier (e.g., `amazon.nova-pro-v1:0`)
+- **price_key** (string): Date or date+region composite: `{yyyy-mm-dd}` or `{yyyy-mm-dd}#{region}`
 
 #### Key Patterns
 
 **Traditional pricing (no region):**
 ```
-PK: "anthropic.claude-3-5-sonnet-20241022-v2:0"
-SK: "2026-01-23"
+model_id: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+price_key: "2026-01-23"
 ```
 
 **Region-specific pricing (for inference profiles):**
 ```
-PK: "anthropic.claude-3-5-sonnet-20241022-v2:0"
-SK: "2026-01-23#us-east-1"
+model_id: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+price_key: "2026-01-23#us-east-1"
 ```
 
 #### Attributes
@@ -542,8 +542,8 @@ SK: "2026-01-23#us-east-1"
 **Example:**
 ```json
 {
-  "PK": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-  "SK": "2026-01-23",
+  "model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  "price_key": "2026-01-23",
   "model_label": "premium",
   "tier": "premium",
   "family": "claude-3.5",
@@ -557,13 +557,13 @@ SK: "2026-01-23#us-east-1"
 
 #### Access Pattern
 
-- **Get today's pricing (traditional)**: `GetItem(PK={model_id}, SK={today})`
-- **Get today's pricing (region-specific)**: `GetItem(PK={model_id}, SK="{today}#{region}")`
+- **Get today's pricing (traditional)**: `GetItem(model_id={bedrock_model_id}, price_key={today})`
+- **Get today's pricing (region-specific)**: `GetItem(model_id={bedrock_model_id}, price_key="{today}#{region}")`
 - **Write pricing**: `PutItem` once per day by pricing refresh process
 
 **Pricing Resolution Order:**
-1. Check region-specific pricing: `SK="{date}#{region}"` (if region provided)
-2. Check default pricing: `SK="{date}"` (no region)
+1. Check region-specific pricing: `price_key="{date}#{region}"` (if region provided)
+2. Check default pricing: `price_key="{date}"` (no region)
 3. Fallback to `default_pricing` from config.yaml
 
 **Note:** Region-specific pricing is used when `model_label` resolves to an inference profile and `calling_region` is provided in the usage submission.
@@ -578,13 +578,13 @@ SK: "2026-01-23#us-east-1"
 
 #### Primary Key
 
-- **PK** (string): `{token_jti}` (JWT ID claim from token)
-- No SK (single item per token)
+- **token_jti** (string): JWT ID claim (jti) from the token - unique identifier for each JWT
+- No sort key (single-key table, one item per token)
 
 #### Key Pattern
 
 ```
-PK: "550e8400-e29b-41d4-a716-446655440000-1737640800"
+token_jti: "550e8400-e29b-41d4-a716-446655440000-1737640800"
 ```
 
 #### Attributes
@@ -598,7 +598,7 @@ PK: "550e8400-e29b-41d4-a716-446655440000-1737640800"
 **Example:**
 ```json
 {
-  "PK": "550e8400-e29b-41d4-a716-446655440000-1737640800",
+  "token_jti": "550e8400-e29b-41d4-a716-446655440000-1737640800",
   "token_type": "refresh",
   "client_id": "org-550e8400-e29b-41d4-a716-446655440000-app-app-production-api",
   "revoked_at_epoch": 1737640800,
@@ -609,10 +609,10 @@ PK: "550e8400-e29b-41d4-a716-446655440000-1737640800"
 
 #### Access Pattern
 
-- **Check if token revoked**: `GetItem(PK={token_jti})`
+- **Check if token revoked**: `GetItem(token_jti={jti_value})`
   - If item exists, token is revoked
   - If item doesn't exist, token is valid (not revoked)
-- **Revoke token**: `PutItem(PK, ...)` with TTL matching token expiry
+- **Revoke token**: `PutItem(token_jti={jti_value}, ...)` with TTL matching token expiry
 
 **Performance Note**:
 - Check happens on every authenticated request
@@ -631,13 +631,13 @@ PK: "550e8400-e29b-41d4-a716-446655440000-1737640800"
 
 #### Primary Key
 
-- **PK** (string): `{token_uuid}`
-- No SK (single item per token)
+- **token** (string): Cryptographically random UUID for one-time secret retrieval
+- No sort key (single-key table, one item per token)
 
 #### Key Pattern
 
 ```
-PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+token: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 ```
 
 #### Attributes
@@ -654,7 +654,7 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 **Example:**
 ```json
 {
-  "PK": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "token": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   "org_id": "550e8400-e29b-41d4-a716-446655440000",
   "app_id": "app-production-api",
   "secret_type": "app",
@@ -667,10 +667,10 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 
 #### Access Pattern
 
-- **Check token validity**: `GetItem(PK={token_uuid})`
+- **Check token validity**: `GetItem(token={token_uuid})`
   - Verify `expires_at_epoch > now`
   - Verify `used == false`
-- **Mark token as used**: `UpdateItem` with condition:
+- **Mark token as used**: `UpdateItem(token={token_uuid}, ...)` with condition:
   ```
   ConditionExpression: "used = :false AND expires_at_epoch > :now"
   UpdateExpression: "SET used = :true, used_at_epoch = :timestamp"
@@ -700,14 +700,14 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 2. Determine scope (ORG or APP) from config
 3. Read sticky state:
    ```
-   GetItem: StickyState(PK="{scope}", SK="DAY#{day}")
+   GetItem: StickyState(scope_key="{scope}", date_key="DAY#{day}")
    ```
 4. If sticky state exists, use `active_model_label`
 5. Otherwise, read totals for all models in ordering:
    ```
    BatchGetItem: [
-     DailyTotal(PK="{scope}#LABEL#{label1}", SK="DAY#{day}"),
-     DailyTotal(PK="{scope}#LABEL#{label2}", SK="DAY#{day}"),
+     DailyTotal(usage_key="{scope}#LABEL#{label1}", date_key="DAY#{day}"),
+     DailyTotal(usage_key="{scope}#LABEL#{label2}", date_key="DAY#{day}"),
      ...
    ]
    ```
@@ -729,8 +729,8 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 4. Update shard counter atomically with deduplication:
    ```
    UpdateItem: UsageAggSharded(
-     PK="{scope}#LABEL#{label}#SH#{shard_id}",
-     SK="DAY#{day}",
+     shard_key="{scope}#LABEL#{label}#SH#{shard_id}",
+     date_key="DAY#{day}",
      ADD cost_usd_micros :c, input_tokens :i, output_tokens :o, requests :r
      ADD request_ids (set): :request_id
      SET updated_at_epoch = :t
@@ -739,8 +739,8 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 5. Read current DailyTotal to return in response:
    ```
    GetItem: DailyTotal(
-     PK="{scope}#LABEL#{label}",
-     SK="DAY#{day}"
+     usage_key="{scope}#LABEL#{label}",
+     date_key="DAY#{day}"
    )
    ```
 6. Calculate quota percentage and determine mode (NORMAL/TIGHT)
@@ -766,8 +766,8 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 1. **Read all shards:**
    ```
    BatchGetItem: [
-     {PK="{scope}#LABEL#{label}#SH#0", SK="DAY#{day}"},
-     {PK="{scope}#LABEL#{label}#SH#1", SK="DAY#{day}"},
+     {shard_key="{scope}#LABEL#{label}#SH#0", date_key="DAY#{day}"},
+     {shard_key="{scope}#LABEL#{label}#SH#1", date_key="DAY#{day}"},
      ...
    ]
    ```
@@ -777,8 +777,8 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 3. **Write consolidated total:**
    ```
    PutItem: DailyTotal(
-     PK="{scope}#LABEL#{label}",
-     SK="DAY#{day}"
+     usage_key="{scope}#LABEL#{label}",
+     date_key="DAY#{day}"
    )
    ```
 
@@ -800,8 +800,8 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 2. Read DailyTotal for each model in ordering:
    ```
    BatchGetItem: [
-     DailyTotal(PK="ORG#{org_id}#LABEL#{label1}", SK="DAY#{today}"),
-     DailyTotal(PK="ORG#{org_id}#LABEL#{label2}", SK="DAY#{today}"),
+     DailyTotal(usage_key="ORG#{org_id}#LABEL#{label1}", date_key="DAY#{today}"),
+     DailyTotal(usage_key="ORG#{org_id}#LABEL#{label2}", date_key="DAY#{today}"),
      ...
    ]
    ```
@@ -822,7 +822,7 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 3. Extract `jti` (JWT ID) from claims
 4. Check if token revoked:
    ```
-   GetItem: RevokedTokens(PK={jti})
+   GetItem: RevokedTokens(token_jti={jti})
    ```
 5. If item exists, token is revoked → return 401
 6. If item doesn't exist, token is valid → proceed
@@ -843,7 +843,7 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 **Steps:**
 1. Read existing config:
    ```
-   GetItem: Config(PK="ORG#{org_id}", SK="") or (SK="APP#{app_id}")
+   GetItem: Config(org_key="ORG#{org_id}", resource_key="") or (resource_key="APP#{app_id}")
    ```
 2. Generate new client_secret and hash with bcrypt
 3. Create secret retrieval token (UUID)
@@ -856,7 +856,7 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
    ```
 5. Store retrieval token:
    ```
-   PutItem: SecretRetrievalTokens(PK={token_uuid}, ...)
+   PutItem: SecretRetrievalTokens(token={token_uuid}, ...)
    ```
 6. Return retrieval token to admin
 
@@ -873,7 +873,7 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 **Steps:**
 1. Validate retrieval token:
    ```
-   GetItem: SecretRetrievalTokens(PK={token_uuid})
+   GetItem: SecretRetrievalTokens(token={token_uuid})
    ```
 2. Verify token not expired and not used
 3. Mark token as used (with condition):
@@ -884,7 +884,7 @@ PK: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
    ```
 4. Read config to get client credentials:
    ```
-   GetItem: Config(PK="ORG#{org_id}", SK="") or (SK="APP#{app_id}")
+   GetItem: Config(org_key="ORG#{org_id}", resource_key="") or (resource_key="APP#{app_id}")
    ```
 5. Return client_id and client_secret in response
 
@@ -908,7 +908,7 @@ scope_id = org_id
 
 **All apps share quota**:
 - App A and App B both contribute to org totals
-- Quota checks read: `DailyTotal(PK="ORG#{org_id}#LABEL#{label}", SK="DAY#{day}")`
+- Quota checks read: `DailyTotal(usage_key="ORG#{org_id}#LABEL#{label}", date_key="DAY#{day}")`
 
 ---
 
@@ -925,7 +925,7 @@ scope_key_prefix = "ORG#{org_id}#APP#{app_id}"
 **Each app has independent quota**:
 - App A has separate totals from App B (within same org)
 - Different orgs can have apps with same app_id (keys include org_id)
-- Quota checks read: `DailyTotal(PK="ORG#{org_id}#APP#{app_id}#LABEL#{label}", SK="DAY#{day}")`
+- Quota checks read: `DailyTotal(usage_key="ORG#{org_id}#APP#{app_id}#LABEL#{label}", date_key="DAY#{day}")`
 
 ---
 
@@ -1044,11 +1044,11 @@ Shard count is **immutable per org** - set at creation, cannot change without da
 ## Index Strategy
 
 All access patterns use primary key lookups:
-- Config: Direct PK+SK access
-- StickyState: Direct PK access
-- UsageAggSharded: Direct PK access for writes
-- DailyTotal: Direct PK access or BatchGetItem
-- PricingCache: Direct PK+SK access
+- Config: Direct org_key+resource_key access
+- StickyState: Direct scope_key+date_key access
+- UsageAggSharded: Direct shard_key+date_key access for writes
+- DailyTotal: Direct usage_key+date_key access or BatchGetItem
+- PricingCache: Direct model_id+price_key access
 
 
 ### Optional GSIs for Advanced Use Cases
@@ -1058,8 +1058,8 @@ All access patterns use primary key lookups:
 **Purpose**: Enable aggregator to discover active scopes dynamically
 
 **Design:**
-- GSI PK: `ACTIVE#{org_day}`
-- GSI SK: `{scope_type}#{scope_id}#LABEL#{label}`
+- GSI partition key: `ACTIVE#{org_day}`
+- GSI sort key: `{scope_type}#{scope_id}#LABEL#{label}`
 
 **Use case**: Aggregator queries to find which scopes have data to aggregate
 

@@ -28,34 +28,34 @@ async def create_tables():
             {
                 'name': 'bedrock-cost-keeper-config',
                 'key_schema': [
-                    {'AttributeName': 'pk', 'KeyType': 'HASH'},
-                    {'AttributeName': 'sk', 'KeyType': 'RANGE'}
+                    {'AttributeName': 'org_key', 'KeyType': 'HASH'},
+                    {'AttributeName': 'resource_key', 'KeyType': 'RANGE'}
                 ],
                 'attribute_definitions': [
-                    {'AttributeName': 'pk', 'AttributeType': 'S'},
-                    {'AttributeName': 'sk', 'AttributeType': 'S'}
+                    {'AttributeName': 'org_key', 'AttributeType': 'S'},
+                    {'AttributeName': 'resource_key', 'AttributeType': 'S'}
                 ]
             },
             {
                 'name': 'bedrock-cost-keeper-usage',
                 'key_schema': [
-                    {'AttributeName': 'pk', 'KeyType': 'HASH'},
-                    {'AttributeName': 'sk', 'KeyType': 'RANGE'}
+                    {'AttributeName': 'shard_key', 'KeyType': 'HASH'},
+                    {'AttributeName': 'date_key', 'KeyType': 'RANGE'}
                 ],
                 'attribute_definitions': [
-                    {'AttributeName': 'pk', 'AttributeType': 'S'},
-                    {'AttributeName': 'sk', 'AttributeType': 'S'}
+                    {'AttributeName': 'shard_key', 'AttributeType': 'S'},
+                    {'AttributeName': 'date_key', 'AttributeType': 'S'}
                 ]
             },
             {
                 'name': 'bedrock-cost-keeper-aggregates',
                 'key_schema': [
-                    {'AttributeName': 'pk', 'KeyType': 'HASH'},
-                    {'AttributeName': 'sk', 'KeyType': 'RANGE'}
+                    {'AttributeName': 'usage_key', 'KeyType': 'HASH'},
+                    {'AttributeName': 'date_key', 'KeyType': 'RANGE'}
                 ],
                 'attribute_definitions': [
-                    {'AttributeName': 'pk', 'AttributeType': 'S'},
-                    {'AttributeName': 'sk', 'AttributeType': 'S'}
+                    {'AttributeName': 'usage_key', 'AttributeType': 'S'},
+                    {'AttributeName': 'date_key', 'AttributeType': 'S'}
                 ]
             },
             {
@@ -157,8 +157,8 @@ async def seed_test_data():
 
         await config_table.put_item(
             Item={
-                'pk': f'ORG#{test_org_id}',
-                'sk': 'CONFIG',
+                'org_key': f'ORG#{test_org_id}',
+                'resource_key': '',  # Empty string for org config
                 'org_name': 'Test Organization',
                 'client_id': f'org-{test_org_id}',
                 'client_secret_hash': secret_hash,
@@ -182,15 +182,16 @@ async def seed_test_data():
 
         await config_table.put_item(
             Item={
-                'pk': f'ORG#{test_org_id}',
-                'sk': f'APP#{test_app_id}',
+                'org_key': f'ORG#{test_org_id}',
+                'resource_key': f'APP#{test_app_id}',
                 'app_name': 'Test Application',
                 'client_id': f'org-{test_org_id}-app-{test_app_id}',
                 'client_secret_hash': app_secret_hash,
-                'model_ordering': ['premium', 'standard'],
+                'model_ordering': ['premium', 'standard', 'economy'],
                 'quotas': {
                     'premium': 500000,
-                    'standard': 250000
+                    'standard': 250000,
+                    'economy': 100000
                 },
                 'created_at_epoch': int(datetime.now(timezone.utc).timestamp()),
                 'updated_at_epoch': int(datetime.now(timezone.utc).timestamp())
@@ -237,8 +238,12 @@ async def clear_tables():
                         await table.delete_item(Key={'token_jti': item['token_jti']})
                     elif table_name == 'bedrock-cost-keeper-secrets':
                         await table.delete_item(Key={'token': item['token']})
-                    else:
-                        await table.delete_item(Key={'pk': item['pk'], 'sk': item['sk']})
+                    elif table_name == 'bedrock-cost-keeper-config':
+                        await table.delete_item(Key={'org_key': item['org_key'], 'resource_key': item['resource_key']})
+                    elif table_name == 'bedrock-cost-keeper-usage':
+                        await table.delete_item(Key={'shard_key': item['shard_key'], 'date_key': item['date_key']})
+                    elif table_name == 'bedrock-cost-keeper-aggregates':
+                        await table.delete_item(Key={'usage_key': item['usage_key'], 'date_key': item['date_key']})
 
                 print(f"✅ Cleared table '{table_name}' ({len(items)} items)")
 

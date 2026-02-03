@@ -24,14 +24,14 @@ Resources:
       TableName: !Sub '${TablePrefix}-config-${Environment}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk
+        - AttributeName: org_key
           AttributeType: S
-        - AttributeName: sk
+        - AttributeName: resource_key
           AttributeType: S
       KeySchema:
-        - AttributeName: pk
+        - AttributeName: org_key
           KeyType: HASH
-        - AttributeName: sk
+        - AttributeName: resource_key
           KeyType: RANGE
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -50,14 +50,14 @@ Resources:
       TableName: !Sub '${TablePrefix}-sticky-state-${Environment}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk
+        - AttributeName: scope_key
           AttributeType: S
-        - AttributeName: sk
+        - AttributeName: date_key
           AttributeType: S
       KeySchema:
-        - AttributeName: pk
+        - AttributeName: scope_key
           KeyType: HASH
-        - AttributeName: sk
+        - AttributeName: date_key
           KeyType: RANGE
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -76,14 +76,14 @@ Resources:
       TableName: !Sub '${TablePrefix}-usage-agg-sharded-${Environment}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk
+        - AttributeName: shard_key
           AttributeType: S
-        - AttributeName: sk
+        - AttributeName: date_key
           AttributeType: S
       KeySchema:
-        - AttributeName: pk
+        - AttributeName: shard_key
           KeyType: HASH
-        - AttributeName: sk
+        - AttributeName: date_key
           KeyType: RANGE
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -102,14 +102,14 @@ Resources:
       TableName: !Sub '${TablePrefix}-daily-total-${Environment}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk
+        - AttributeName: usage_key
           AttributeType: S
-        - AttributeName: sk
+        - AttributeName: date_key
           AttributeType: S
       KeySchema:
-        - AttributeName: pk
+        - AttributeName: usage_key
           KeyType: HASH
-        - AttributeName: sk
+        - AttributeName: date_key
           KeyType: RANGE
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -128,14 +128,14 @@ Resources:
       TableName: !Sub '${TablePrefix}-pricing-cache-${Environment}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk
+        - AttributeName: model_id
           AttributeType: S
-        - AttributeName: sk
+        - AttributeName: price_key
           AttributeType: S
       KeySchema:
-        - AttributeName: pk
+        - AttributeName: model_id
           KeyType: HASH
-        - AttributeName: sk
+        - AttributeName: price_key
           KeyType: RANGE
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -154,10 +154,10 @@ Resources:
       TableName: !Sub '${TablePrefix}-tokens-${Environment}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk
+        - AttributeName: token_jti
           AttributeType: S
       KeySchema:
-        - AttributeName: pk
+        - AttributeName: token_jti
           KeyType: HASH
       TimeToLiveSpecification:
         AttributeName: expires_at_epoch
@@ -179,10 +179,10 @@ Resources:
       TableName: !Sub '${TablePrefix}-secrets-${Environment}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk
+        - AttributeName: token
           AttributeType: S
       KeySchema:
-        - AttributeName: pk
+        - AttributeName: token
           KeyType: HASH
       TimeToLiveSpecification:
         AttributeName: expires_at_epoch

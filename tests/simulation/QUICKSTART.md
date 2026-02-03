@@ -60,7 +60,7 @@ finch run -d -p 8000:8000 amazon/dynamodb-local
 
 ### 2. Create Tables
 ```bash
-python scripts/init_local_dynamodb.py create
+python scripts/init_local_dynamodb.py init
 ```
 
 ### 3. Seed Test Data
@@ -130,7 +130,7 @@ Total cost:  315 micro-USD = $0.000315
 
 ### "Table not found" error
 **Problem**: Tables not created
-**Solution**: `python scripts/init_local_dynamodb.py create && python scripts/init_local_dynamodb.py seed`
+**Solution**: `python scripts/init_local_dynamodb.py init && python scripts/init_local_dynamodb.py seed`
 
 ### Tests fail with wrong costs
 **Problem**: Stale pricing data

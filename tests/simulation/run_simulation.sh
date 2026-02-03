@@ -30,7 +30,7 @@ echo ""
 # Check if tables exist
 echo -e "${YELLOW}[2/3] Verifying database setup...${NC}"
 if ! aws dynamodb describe-table --table-name bedrock-cost-keeper-config --endpoint-url http://localhost:8000 --region us-east-1 >/dev/null 2>&1; then
-    echo -e "${RED}❌ Tables not found. Run: python scripts/init_local_dynamodb.py create && python scripts/init_local_dynamodb.py seed${NC}"
+    echo -e "${RED}❌ Tables not found. Run: python scripts/init_local_dynamodb.py init && python scripts/init_local_dynamodb.py seed${NC}"
     exit 1
 fi
 echo -e "${GREEN}✅ Database tables exist${NC}"

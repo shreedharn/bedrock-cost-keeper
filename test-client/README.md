@@ -1,6 +1,16 @@
 # Bedrock Cost Keeper Test Client
 
-This test client demonstrates the complete end-to-end workflow for using the Bedrock Cost Keeper service.
+This directory contains test clients for the Bedrock Cost Keeper service.
+
+## Quick Reference
+
+**Which tool should I use?**
+
+- 🔧 **Setting up a new deployment?** → Use `manual_test.py`
+- 🐛 **Debugging API issues?** → Use `manual_test.py`
+- 🧪 **Testing inference profiles?** → Use `manual_test.py`
+- ✅ **Testing existing deployment?** → Use `bedrock_client.py`
+- 🔄 **Building automation/integration?** → Use `bedrock_client.py`
 
 ## Features
 
@@ -38,6 +48,39 @@ export AWS_REGION=us-east-1
 
 ## Configuration
 
+### Manual Test Configuration (manual_test_config.json)
+
+For manual testing with inference profiles:
+
+1. **Copy the example configuration to the project root:**
+   ```bash
+   # From the project root directory
+   cp test-client/manual_test_config.json.example manual_test_config.json
+   ```
+
+   **Note:** The config file must be in the project root.
+
+2. **Update with your actual values:**
+
+   Get your deployment values from `cloudformation/dev/.env.cloudformation`:
+
+   - `inference_profile_arn`: Use `SAMPLE_APP_INFERENCE_PROFILE_ARN` from .env.cloudformation
+   - `jwt_secret_name`: Use `JWT_SECRET_NAME` from .env.cloudformation
+   - `provisioning_api_key_secret_name`: Use `PROVISIONING_API_KEY_NAME` from .env.cloudformation
+   - `aws_region`: Use `AWS_REGION` from .env.cloudformation
+
+   Example:
+   ```json
+   {
+     "inference_profile_arn": "arn:aws:bedrock:us-east-1:YOUR_ACCOUNT_ID:application-inference-profile/YOUR_PROFILE_ID",
+     "jwt_secret_name": "bedrock-cost-keeper/dev/jwt-secret",
+     "provisioning_api_key_secret_name": "bedrock-cost-keeper/dev/provisioning-api-key"
+   }
+   ```
+
+
+### Standard Configuration (config.json)
+
 Edit `config.json` with your credentials:
 
 ```json
@@ -71,25 +114,115 @@ Client Secret: AbCdEfGhIjKlMnOpQrStUvWxYz0123456789
 
 Use these values to update your `config.json`.
 
-## Usage
+## Test Clients Overview
 
-### Basic Test
+This directory contains two different test clients for different use cases:
 
-Run the test client with default settings (5 inference requests):
+### 1. manual_test.py - Interactive Manual Testing
 
+**Purpose:** Step-by-step interactive testing of the complete API workflow
+
+**Configuration:** Uses `manual_test_config.json`
+
+**Features:**
+- Interactive prompts at each step
+- Visual output with tables and panels (uses `rich` library)
+- Tests the full provisioning workflow:
+  1. Create Organization (via provisioning API)
+  2. Create Application
+  3. Authenticate
+  4. Register Inference Profile
+  5. Get Model Selection
+  6. Invoke Bedrock
+  7. Submit Usage
+  8. Check Aggregates
+- Logs saved to `logs/manual_test_YYYYMMDD_HHMMSS.log`
+- Pause/resume capability for debugging
+
+**When to use:**
+- Setting up a new deployment
+- Debugging API issues
+- Understanding the complete workflow
+- Testing inference profile registration
+
+**Run:**
+```bash
+python manual_test.py
+```
+
+The script will prompt you at each step. You can:
+- Review request/response details
+- Skip steps if needed
+- Continue after errors for debugging
+
+### 2. bedrock_client.py - Automated Client
+
+**Purpose:** Automated testing and integration example
+
+**Configuration:** Uses `config.json`
+
+**Features:**
+- Runs 5 inference requests automatically
+- Demonstrates OAuth2 authentication
+- Shows model selection based on quotas
+- Submits usage and verifies aggregation
+- Suitable for CI/CD integration
+
+**When to use:**
+- Testing an already-configured deployment
+- Integration testing
+- Load testing (by modifying request count)
+- Example for client implementation
+
+**Run:**
 ```bash
 python bedrock_client.py
 ```
 
-### Custom Configuration
+Or with custom config:
+```bash
+python bedrock_client.py --config my-config.json
+```
 
-Use a different configuration file:
+## Usage Examples
+
+### Quick Start - Manual Testing
+
+For first-time setup or debugging:
+
+```bash
+# 1. Setup config (from project root)
+cp test-client/manual_test_config.json.example manual_test_config.json
+# Edit manual_test_config.json with your values
+
+# 2. Run interactive test from project root
+python project-root/test-client/manual_test.py
+```
+
+Or with VS Code debugger: Use the "Debug Test Client" launch configuration.
+
+The script will guide you through each step with prompts and visual feedback.
+
+### Quick Start - Automated Testing
+
+For pre-configured deployments:
+
+```bash
+# 1. Setup config (requires existing org/app credentials)
+cp config.json.example config.json  # If example exists
+# Edit config.json with your credentials
+
+# 2. Run automated test
+python bedrock_client.py
+```
+
+Or with custom configuration:
 
 ```bash
 python bedrock_client.py --config my-config.json
 ```
 
-### Expected Output
+### Expected Output (bedrock_client.py)
 
 ```
 ============================================================
@@ -144,13 +277,83 @@ Service Aggregates
 [INFO] Test completed successfully!
 ```
 
-## Workflow
+### Expected Output (manual_test.py)
 
-1. **Authenticate**: Obtains JWT access token via OAuth2
+```
+╭─────────────────────────────────────────────────────╮
+│ Bedrock Cost Keeper - Manual API Test              │
+│ Service URL: http://localhost:8080                  │
+│ AWS Profile: default                                │
+│ AWS Region: us-east-1                               │
+│ Log File: logs/manual_test_20260202_143022.log     │
+╰─────────────────────────────────────────────────────╯
+
+────────────── Step 1/8: Create Organization ──────────────
+
+Run this step? [Y/n]: y
+
+REQUEST
+Method: POST
+URL: http://localhost:8080/api/v1/admin/orgs
+Headers: {...}
+Body: {...}
+
+Press Enter to send request...
+
+RESPONSE (201)
+Status: 201 Created
+Body: {
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
+  "client_id": "org-550e8400-...",
+  "client_secret": "AbCdEf..."
+}
+
+✓ Organization created successfully
+
+Press Enter to continue...
+
+────────────── Step 2/8: Create Application ───────────────
+...
+```
+
+The script provides:
+- Colored, formatted output using the `rich` library
+- Pause points to review each step
+- Detailed request/response logging
+- Option to skip or retry steps
+- Final summary with log file location
+
+## Workflows
+
+### manual_test.py - Full Provisioning Workflow
+
+1. **Create Organization**: Register org via provisioning API (requires API key from Secrets Manager)
+2. **Create Application**: Register app under the org
+3. **Authenticate**: Get OAuth2 JWT access token using org/app credentials
+4. **Register Inference Profile**: (Optional) Register AWS Bedrock inference profile for the app
+5. **Get Model Selection**: Query service for recommended model based on quotas
+6. **Invoke Bedrock**: Call AWS Bedrock with selected model or inference profile
+7. **Submit Usage**: Post token usage to service (cost calculated server-side)
+8. **Check Aggregates**: Verify usage tracking and aggregation
+
+### bedrock_client.py - Client Usage Workflow
+
+1. **Authenticate**: Obtains JWT access token via OAuth2 (assumes org/app exist)
 2. **Get Model Selection**: Queries the service for recommended model based on quotas
 3. **Invoke Bedrock**: Calls AWS Bedrock with the recommended model
 4. **Submit Usage**: Posts token usage to the service (service calculates cost server-side)
 5. **Verify**: Retrieves aggregates to confirm tracking
+
+### Comparison
+
+| Feature | manual_test.py | bedrock_client.py |
+|---------|---------------|-------------------|
+| Provisioning | ✅ Creates org/app | ❌ Requires existing setup |
+| Inference Profiles | ✅ Registers profiles | ❌ Uses pre-configured models |
+| Interaction | Interactive prompts | Fully automated |
+| Output | Rich formatted UI | Simple console logs |
+| Logging | File + console | Console only |
+| Use Case | Setup & debugging | Integration & testing |
 
 ## Troubleshooting
 

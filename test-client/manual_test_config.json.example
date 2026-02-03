@@ -2,7 +2,7 @@
   "service_url": "http://localhost:8080",
   "aws_profile": "default",
   "aws_region": "us-east-1",
-  "inference_profile_arn": "arn:aws:bedrock:us-east-1:123456789012:inference-profile/sample-app-nova-lite-dev",
+  "inference_profile_arn": "arn:aws:bedrock:us-east-1:YOUR_ACCOUNT_ID:application-inference-profile/YOUR_PROFILE_ID",
   "jwt_secret_name": "bedrock-cost-keeper/dev/jwt-secret",
   "provisioning_api_key_secret_name": "bedrock-cost-keeper/dev/provisioning-api-key",
   "test_org_name": "sample-org",

@@ -92,6 +92,7 @@ credentials.json
 *.cert
 *.crt
 *_test_*.txt
+manual_test_config.json
 
 # CloudFormation
 cloudformation/parameters/*-local.json
@@ -107,3 +108,5 @@ test_results/
 *_Analysis.md
 *_Completion.md
 *_Verification.md
+
+error.txt

@@ -9,6 +9,7 @@ Run: python manual_test.py
 import json
 import os
 import sys
+import uuid
 from datetime import datetime, timezone
 from typing import Dict, Optional
 import boto3
@@ -143,8 +144,12 @@ class ManualTester:
             self.log(f"✗ Failed to get provisioning API key: {e}", 'ERROR')
             return False
 
+        # Generate org_id if not already set
+        if not self.org_id:
+            self.org_id = str(uuid.uuid4())
+
         # Prepare request
-        url = f"{self.service_url}/provisioning/orgs"
+        url = f"{self.service_url}/api/v1/orgs/{self.org_id}"
         headers = {
             "X-API-Key": provisioning_api_key,
             "Content-Type": "application/json"
@@ -157,15 +162,15 @@ class ManualTester:
             "quotas": self.config['quotas']
         }
 
-        self.show_request("POST", url, headers, body)
+        self.show_request("PUT", url, headers, body)
         self.pause()
 
         # Execute
         try:
-            response = requests.post(url, headers=headers, json=body, timeout=10)
+            response = requests.put(url, headers=headers, json=body, timeout=10)
             self.show_response(response)
 
-            if response.status_code == 201:
+            if response.status_code in [200, 201]:
                 data = response.json()
                 self.org_id = data['org_id']
                 self.client_id = data['client_id']
@@ -201,26 +206,26 @@ class ManualTester:
             return False
 
         # Prepare request
-        url = f"{self.service_url}/provisioning/orgs/{self.org_id}/apps"
+        app_id = self.config['test_app_id']
+        url = f"{self.service_url}/api/v1/orgs/{self.org_id}/apps/{app_id}"
         headers = {
             "X-API-Key": provisioning_api_key,
             "Content-Type": "application/json"
         }
         body = {
-            "app_id": self.config['test_app_id'],
             "app_name": self.config['test_app_name']
         }
 
-        self.show_request("POST", url, headers, body)
+        self.show_request("PUT", url, headers, body)
         self.pause()
 
         # Execute
         try:
-            response = requests.post(url, headers=headers, json=body, timeout=10)
+            response = requests.put(url, headers=headers, json=body, timeout=10)
             self.show_response(response)
 
-            if response.status_code == 201:
-                self.log(f"✓ Application created: {self.app_id}", 'SUCCESS')
+            if response.status_code in [200, 201]:
+                self.log(f"✓ Application created: {app_id}", 'SUCCESS')
             else:
                 self.log(f"✗ Failed to create application: {response.status_code}", 'ERROR')
                 return False
