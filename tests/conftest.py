@@ -68,11 +68,17 @@ def test_client(mock_db):
     # Set the mock db_bridge
     dependencies.db_bridge = mock_db
 
+    # Mock the provisioning API key in settings
+    from src.core.config import settings
+    original_key = settings.provisioning_api_key
+    settings.provisioning_api_key = "change-me-in-production"
+
     client = TestClient(app)
     yield client
 
     # Cleanup
     dependencies.db_bridge = None
+    settings.provisioning_api_key = original_key
 
 
 @pytest.fixture

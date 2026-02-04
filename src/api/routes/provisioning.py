@@ -3,17 +3,16 @@
 from fastapi import APIRouter, Depends, Path
 from typing import Annotated
 from datetime import datetime, timezone
-import uuid
 
-from ..models.requests import OrgRegistrationRequest, AppRegistrationRequest, CredentialRotationRequest
+from ..models.requests import OrgRegistrationRequest, AppRegistrationRequest
 from ..models.responses import (
-    OrgRegistrationResponse, AppRegistrationResponse, CredentialRotationResponse,
-    SecretRetrievalResponse, CredentialsInfo, SecretRetrievalInfo, ConfigInfo, RotationInfo
+    OrgRegistrationResponse, AppRegistrationResponse,
+    CredentialsInfo, ConfigInfo
 )
 from ...infrastructure.database.dynamodb_bridge import DynamoDBBridge
 from ...infrastructure.security.jwt_handler import JWTHandler
 from ...core.config import main_config
-from ...core.exceptions import InvalidConfigException, AlreadyExistsException
+from ...core.exceptions import InvalidConfigException
 from ..dependencies import get_db_bridge, verify_provisioning_api_key
 
 
@@ -52,22 +51,10 @@ async def register_or_update_org(
     # Generate client credentials
     client_id = f"org-{org_id}"
     client_secret = None
-    retrieval_token = None
 
     if is_new:
         client_secret = jwt_handler.generate_secret()
         client_secret_hash = jwt_handler.hash_secret(client_secret)
-        retrieval_token = str(uuid.uuid4())
-
-        # Create secret retrieval token
-        await db.create_secret_retrieval_token(
-            token_uuid=retrieval_token,
-            org_id=org_id,
-            app_id=None,
-            secret_type="org",
-            client_id=client_id,
-            expires_at_epoch=int(datetime.now(timezone.utc).timestamp()) + 600  # 10 minutes
-        )
     else:
         client_secret_hash = existing_org.get('client_secret_hash')
 
@@ -107,11 +94,7 @@ async def register_or_update_org(
         response.created_at = datetime.now(timezone.utc)
         response.credentials = CredentialsInfo(
             client_id=client_id,
-            secret_retrieval=SecretRetrievalInfo(
-                url=f"/orgs/{org_id}/credentials/secret?token={retrieval_token}",
-                token=retrieval_token,
-                expires_at=datetime.fromtimestamp(int(datetime.now(timezone.utc).timestamp()) + 600, tz=timezone.utc)
-            )
+            client_secret=client_secret
         )
     else:
         response.updated_at = datetime.now(timezone.utc)
@@ -143,21 +126,11 @@ async def register_or_update_app(
 
     # Generate client credentials for app
     client_id = f"org-{org_id}-app-{app_id}"
-    retrieval_token = None
+    client_secret = None
 
     if is_new:
         client_secret = jwt_handler.generate_secret()
         client_secret_hash = jwt_handler.hash_secret(client_secret)
-        retrieval_token = str(uuid.uuid4())
-
-        await db.create_secret_retrieval_token(
-            token_uuid=retrieval_token,
-            org_id=org_id,
-            app_id=app_id,
-            secret_type="app",
-            client_id=client_id,
-            expires_at_epoch=int(datetime.now(timezone.utc).timestamp()) + 600
-        )
     else:
         client_secret_hash = existing_app.get('client_secret_hash')
 
@@ -195,11 +168,7 @@ async def register_or_update_app(
         response.created_at = datetime.now(timezone.utc)
         response.credentials = CredentialsInfo(
             client_id=client_id,
-            secret_retrieval=SecretRetrievalInfo(
-                url=f"/orgs/{org_id}/apps/{app_id}/credentials/secret?token={retrieval_token}",
-                token=retrieval_token,
-                expires_at=datetime.fromtimestamp(int(datetime.now(timezone.utc).timestamp()) + 600, tz=timezone.utc)
-            )
+            client_secret=client_secret
         )
     else:
         response.updated_at = datetime.now(timezone.utc)

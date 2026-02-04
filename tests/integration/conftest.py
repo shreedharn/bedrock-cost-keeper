@@ -60,17 +60,17 @@ async def clear_usage_data(dynamodb_bridge):
         aws_secret_access_key='fake'
     ) as dynamodb:
 
-        # Clear usage table
+        # Clear usage table (UsageAggSharded uses shard_key/date_key)
         usage_table = await dynamodb.Table('bedrock-cost-keeper-usage')
         response = await usage_table.scan()
         for item in response.get('Items', []):
-            await usage_table.delete_item(Key={'pk': item['pk'], 'sk': item['sk']})
+            await usage_table.delete_item(Key={'shard_key': item['shard_key'], 'date_key': item['date_key']})
 
-        # Clear aggregates table
+        # Clear aggregates table (DailyTotal uses usage_key/date_key)
         agg_table = await dynamodb.Table('bedrock-cost-keeper-aggregates')
         response = await agg_table.scan()
         for item in response.get('Items', []):
-            await agg_table.delete_item(Key={'pk': item['pk'], 'sk': item['sk']})
+            await agg_table.delete_item(Key={'usage_key': item['usage_key'], 'date_key': item['date_key']})
 
 
 @pytest.fixture(scope="session")
@@ -91,12 +91,12 @@ def test_org_credentials_data():
 
             config_table = await dynamodb.Table('bedrock-cost-keeper-config')
 
-            # Get the test org
+            # Get the test org (Config table uses org_key/resource_key with '#' for root org config)
             test_org_id = '550e8400-e29b-41d4-a716-446655440000'
             response = await config_table.get_item(
                 Key={
-                    'pk': f'ORG#{test_org_id}',
-                    'sk': 'CONFIG'
+                    'org_key': f'ORG#{test_org_id}',
+                    'resource_key': '#'  # Root config marker (DynamoDB doesn't allow empty strings)
                 }
             )
 
@@ -108,8 +108,8 @@ def test_org_credentials_data():
             # Get the app
             app_response = await config_table.get_item(
                 Key={
-                    'pk': f'ORG#{test_org_id}',
-                    'sk': 'APP#test-app'
+                    'org_key': f'ORG#{test_org_id}',
+                    'resource_key': 'APP#test-app'
                 }
             )
 

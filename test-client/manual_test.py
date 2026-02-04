@@ -39,6 +39,9 @@ class ManualTester:
         self.aws_profile = self.config.get('aws_profile', 'default')
         self.aws_region = self.config.get('aws_region', 'us-east-1')
 
+        # HTTP timeout (set high for debugging)
+        self.http_timeout = self.config.get('http_timeout', 300)  # 5 minutes default
+
         # Setup AWS clients
         try:
             session = boto3.Session(profile_name=self.aws_profile)
@@ -163,18 +166,18 @@ class ManualTester:
         }
 
         self.show_request("PUT", url, headers, body)
-        self.pause()
 
         # Execute
         try:
-            response = requests.put(url, headers=headers, json=body, timeout=10)
+            response = requests.put(url, headers=headers, json=body, timeout=self.http_timeout)
             self.show_response(response)
 
             if response.status_code in [200, 201]:
                 data = response.json()
                 self.org_id = data['org_id']
-                self.client_id = data['client_id']
-                self.client_secret = data['client_secret']
+                self.client_id = data['credentials']['client_id']
+                self.client_secret = data['credentials']['client_secret']
+
                 self.log(f"✓ Organization created: {self.org_id}", 'SUCCESS')
                 self.log(f"✓ Client ID: {self.client_id}", 'SUCCESS')
                 console.print(f"\n[bold green]Client Secret (SAVE THIS!):[/bold green] {self.client_secret}")
@@ -221,11 +224,25 @@ class ManualTester:
 
         # Execute
         try:
-            response = requests.put(url, headers=headers, json=body, timeout=10)
+            response = requests.put(url, headers=headers, json=body, timeout=self.http_timeout)
             self.show_response(response)
 
             if response.status_code in [200, 201]:
-                self.log(f"✓ Application created: {app_id}", 'SUCCESS')
+                data = response.json()
+
+                # Extract app credentials if this is a new app creation
+                if 'credentials' in data:
+                    # Replace org credentials with app credentials
+                    self.client_id = data['credentials']['client_id']
+                    self.client_secret = data['credentials']['client_secret']
+
+                    self.log(f"✓ Application created: {app_id}", 'SUCCESS')
+                    self.log(f"✓ App Client ID: {self.client_id}", 'SUCCESS')
+                    console.print(f"\n[bold green]App Client Secret (SAVE THIS!):[/bold green] {self.client_secret}")
+                    console.print(f"[bold yellow]Note:[/bold yellow] App credentials replace org credentials for authentication")
+                else:
+                    # This is an update, credentials not returned
+                    self.log(f"✓ Application updated: {app_id}", 'SUCCESS')
             else:
                 self.log(f"✗ Failed to create application: {response.status_code}", 'ERROR')
                 return False
@@ -241,18 +258,19 @@ class ManualTester:
         console.print(Panel("[bold]Step 3: Authenticate (Get JWT Token)[/bold]"))
 
         if not self.client_id or not self.client_secret:
-            self.log("✗ Client credentials not available. Run step 1 first.", 'ERROR')
+            self.log("✗ Client credentials not available. Run steps 1-2 first.", 'ERROR')
             return False
 
-        # Prepare request
+        # Prepare request - using APP credentials from Step 2
+        self.log(f"Using app credentials: {self.client_id}", 'INFO')
         url = f"{self.service_url}/auth/token"
         headers = {
             "Content-Type": "application/x-www-form-urlencoded"
         }
         data = {
             "grant_type": "client_credentials",
-            "client_id": self.client_id,
-            "client_secret": self.client_secret
+            "client_id": self.client_id,  # App client_id from Step 2
+            "client_secret": self.client_secret  # App client_secret from Step 2
         }
 
         console.print(Panel("[bold cyan]REQUEST[/bold cyan]", expand=False))
@@ -269,7 +287,7 @@ class ManualTester:
 
         # Execute
         try:
-            response = requests.post(url, headers=headers, data=data, timeout=10)
+            response = requests.post(url, headers=headers, data=data, timeout=self.http_timeout)
             self.show_response(response)
 
             if response.status_code == 200:
@@ -310,7 +328,7 @@ class ManualTester:
         self.pause()
 
         try:
-            response = requests.post(url, headers=headers, json=body, timeout=10)
+            response = requests.post(url, headers=headers, json=body, timeout=self.http_timeout)
             self.show_response(response)
 
             if response.status_code == 201:
@@ -355,7 +373,7 @@ class ManualTester:
         self.pause()
 
         try:
-            response = requests.get(url, headers=headers, params=params, timeout=10)
+            response = requests.get(url, headers=headers, params=params, timeout=self.http_timeout)
             self.show_response(response)
 
             if response.status_code == 200:
@@ -460,7 +478,7 @@ class ManualTester:
         self.pause()
 
         try:
-            response = requests.post(url, headers=headers, json=body, timeout=10)
+            response = requests.post(url, headers=headers, json=body, timeout=self.http_timeout)
             self.show_response(response)
 
             if response.status_code == 201:
@@ -502,7 +520,7 @@ class ManualTester:
         self.pause()
 
         try:
-            response = requests.get(url, headers=headers, params=params, timeout=10)
+            response = requests.get(url, headers=headers, params=params, timeout=self.http_timeout)
             self.show_response(response)
 
             if response.status_code == 200:

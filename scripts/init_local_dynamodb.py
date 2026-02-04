@@ -158,7 +158,7 @@ async def seed_test_data():
         await config_table.put_item(
             Item={
                 'org_key': f'ORG#{test_org_id}',
-                'resource_key': '',  # Empty string for org config
+                'resource_key': '#',  # Root config marker (DynamoDB doesn't allow empty strings)
                 'org_name': 'Test Organization',
                 'client_id': f'org-{test_org_id}',
                 'client_secret_hash': secret_hash,

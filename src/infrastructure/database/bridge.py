@@ -294,44 +294,6 @@ class DatabaseBridge(ABC):
         """
         pass
 
-    # ==================== Secret Retrieval Token Operations ====================
-
-    @abstractmethod
-    async def create_secret_retrieval_token(
-        self,
-        token_uuid: str,
-        org_id: str,
-        app_id: Optional[str],
-        secret_type: str,
-        client_id: str,
-        expires_at_epoch: int
-    ) -> None:
-        """
-        Create a one-time secret retrieval token.
-
-        Args:
-            token_uuid: Token UUID
-            org_id: Organization UUID
-            app_id: Application identifier (optional)
-            secret_type: "org" or "app"
-            client_id: Client identifier
-            expires_at_epoch: Expiration timestamp
-        """
-        pass
-
-    @abstractmethod
-    async def use_secret_retrieval_token(self, token_uuid: str) -> Optional[Dict[str, Any]]:
-        """
-        Mark a secret retrieval token as used (first-use-wins).
-
-        Args:
-            token_uuid: Token UUID
-
-        Returns:
-            Token data if successful, None if already used or expired
-        """
-        pass
-
     # ==================== Health Check ====================
 
     @abstractmethod

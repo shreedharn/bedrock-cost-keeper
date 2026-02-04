@@ -156,41 +156,129 @@ X-API-Key: <provisioning-api-key>
 - `PUT /orgs/{org_id}/apps/{app_id}`
 - `POST /orgs/{org_id}/credentials/rotate`
 - `POST /orgs/{org_id}/apps/{app_id}/credentials/rotate`
-- `GET /orgs/{org_id}/credentials/secret` (one-time retrieval)
 
-### Client Credential Management
+### Secrets and Credentials in the System
 
-**Client ID Format:** `org-{org_id}-app-{app_id}`
+The system uses **three types of secrets** with different purposes and scopes:
 
-**Example:** `org-550e8400-e29b-41d4-a716-446655440000-app-app-production-api`
+#### Quick Reference
 
-**Client Secret:**
-- Generated during org/app registration/rotation
-- 32-byte cryptographically secure random value, base64-encoded
-- Stored as bcrypt hash in DynamoDB
-- **Never returned in API responses** (see retrieval endpoint below)
-- Should be rotated every 90 days (automated alerts recommended)
+| Secret Type | Quantity | Scope | Used By | Purpose | Authentication Method |
+|-------------|----------|-------|---------|---------|----------------------|
+| **Provisioning API Key** | 1 | Global | Admin/DevOps | Setup orgs & apps | `X-API-Key` header |
+| **Org Client Secret** | 1 per org | Organization | Org admins | Org-level JWT tokens | OAuth2 Client Credentials |
+| **App Client Secret** | 1 per app | Application | App runtime | App-level JWT tokens | OAuth2 Client Credentials |
 
-**Secret Retrieval:**
+**Most common usage:** Applications use **App Client Secret** to obtain JWT tokens for API operations.
 
-After registration, retrieve secret using one-time token:
+#### 1. Provisioning API Key (Admin Secret)
 
+**Purpose:** Administrative operations for setting up organizations and applications
+
+**Characteristics:**
+- **Quantity:** 1 shared secret for all admins
+- **Scope:** Global/service-level
+- **Storage:** AWS Secrets Manager (recommended) or environment variable
+- **Usage:** X-API-Key header for provisioning endpoints
+- **Lifecycle:** Long-lived, manually rotated
+- **Access:** Only admin/DevOps personnel
+
+**Used for:**
+- Creating/updating organizations (`PUT /orgs/{org_id}`)
+- Creating/updating applications (`PUT /orgs/{org_id}/apps/{app_id}`)
+- Credential rotation (when implemented)
+
+**Example:**
 ```http
-GET /orgs/{org_id}/credentials/secret?token=<one-time-token> HTTP/1.1
-X-API-Key: <provisioning-api-key>
+X-API-Key: provisioning-key-abc123def456
 ```
 
-Response:
-```json
-{
-  "client_id": "org-550e8400-e29b-41d4-a716-446655440000",
-  "client_secret": "base64-encoded-secret",
-  "expires_at": "2026-01-23T15:40:00Z",
-  "note": "This secret will not be shown again. Store securely."
-}
+#### 2. Organization Client Secrets (Org-Level Auth)
+
+**Purpose:** Authentication at organization level (all apps under the org)
+
+**Characteristics:**
+- **Quantity:** 1 secret per organization
+- **Scope:** Organization-wide
+- **Format:** `client_id = org-{org_id}`
+- **Generation:** During org registration (`PUT /orgs/{org_id}`)
+- **Storage:** Client's secure credential store
+- **Lifecycle:** Rotatable (90-day recommended)
+- **Access:** Organization administrators
+
+**Used for:**
+- Obtaining JWT tokens for org-level operations (if quota_scope = "ORG")
+- Less common - most clients use app-level auth
+
+**Example Client ID:** `org-550e8400-e29b-41d4-a716-446655440000`
+
+#### 3. Application Client Secrets (App-Level Auth)
+
+**Purpose:** Authentication for specific applications (most common use case)
+
+**Characteristics:**
+- **Quantity:** 1 secret per application
+- **Scope:** Application-specific
+- **Format:** `client_id = org-{org_id}-app-{app_id}`
+- **Generation:** During app registration (`PUT /orgs/{org_id}/apps/{app_id}`)
+- **Storage:** Application's secure credential store (e.g., AWS Secrets Manager)
+- **Lifecycle:** Rotatable (90-day recommended)
+- **Access:** Application runtime environment
+
+**Used for:**
+- Obtaining JWT tokens for app-specific API operations
+- Model selection, usage submission, aggregate queries
+- Most common authentication method
+
+**Example Client ID:** `org-550e8400-e29b-41d4-a716-446655440000-app-production-api`
+
+---
+
+### Client Secret Properties (Org & App Secrets)
+
+**All client secrets share these properties:**
+- **Format:** 32-byte cryptographically secure random value, base64-encoded
+- **Storage:** Stored as bcrypt hash in DynamoDB (irreversible)
+- **Transmission:** Only sent once during registration/rotation, over TLS
+- **Security:** Never logged or stored in plain text
+- **Display:** Returned only once - client must save immediately
+- **Rotation:** Recommended every 90 days
+
+---
+
+### Secret Hierarchy and Usage Pattern
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Provisioning API Key (Admin)                                │
+│ └─> Used by: DevOps/Admin personnel                         │
+│ └─> For: Setting up orgs and apps                           │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            │ Creates ↓
+                            │
+┌─────────────────────────────────────────────────────────────┐
+│ Organization: acme-corp (org-uuid-123)                      │
+│ ├─> Org Client Secret                                       │
+│ │   └─> Used by: Org admins (rare)                         │
+│ │   └─> For: Org-level JWT tokens (if quota_scope=ORG)     │
+│ │                                                            │
+│ ├─> App: production-api (org-uuid-123-app-prod-api)        │
+│ │   └─> App Client Secret                                   │
+│ │       └─> Used by: Production application runtime         │
+│ │       └─> For: App-specific JWT tokens (most common)      │
+│ │                                                            │
+│ └─> App: staging-api (org-uuid-123-app-staging-api)        │
+│     └─> App Client Secret                                   │
+│         └─> Used by: Staging application runtime            │
+│         └─> For: App-specific JWT tokens                    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Token expires after:** 10 minutes or first use (whichever comes first)
+**Typical Client Flow:**
+1. **Setup (Admin):** Use Provisioning API Key → Create org and app → Receive app client secret
+2. **Runtime (Application):** Use app client secret → Get JWT token → Make API calls
+3. **Periodic (Admin):** Use Provisioning API Key → Rotate app credentials → Update app config
 
 ### Authorization Model
 
@@ -628,11 +716,7 @@ X-API-Key: <provisioning-api-key>
   "created_at": "2026-01-23T15:30:45Z",
   "credentials": {
     "client_id": "org-550e8400-e29b-41d4-a716-446655440000",
-    "secret_retrieval": {
-      "url": "/orgs/550e8400-e29b-41d4-a716-446655440000/credentials/secret?token=7c9e6679-7425-40de-944b-e07fc1f90ae7",
-      "token": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-      "expires_at": "2026-01-23T15:40:45Z"
-    }
+    "client_secret": "YzJkM2U0ZjVnNmg3aThrOWowazFsMm0zbjRvNXA2cTdyOHM5dDB1MQ=="
   },
   "configuration": {
     "timezone": "America/New_York",
@@ -660,8 +744,8 @@ X-API-Key: <provisioning-api-key>
 ```
 
 **Important:**
-- Client secret is NOT returned in this response
-- Use the one-time retrieval token to get the secret within 10 minutes
+- Client secret is returned ONLY ONCE in the creation response - store it securely
+- The secret is transmitted over TLS and never logged
 - PUT is idempotent - repeated calls update the configuration without creating new credentials
 
 **Error Responses:**
@@ -772,11 +856,7 @@ X-API-Key: <provisioning-api-key>
   "created_at": "2026-01-23T15:30:45Z",
   "credentials": {
     "client_id": "org-550e8400-e29b-41d4-a716-446655440000-app-app-production-api",
-    "secret_retrieval": {
-      "url": "/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/credentials/secret?token=8d0f7680-8536-51ef-b827-557766551001",
-      "token": "8d0f7680-8536-51ef-b827-557766551001",
-      "expires_at": "2026-01-23T15:40:45Z"
-    }
+    "client_secret": "ZDNlNGY1ZzZoN2k4azkwajFrMmwzbTRuNW82cDdxOHI5czB0MXUydjM="
   },
   "configuration": {
     "app_name": "Production API",
@@ -803,8 +883,8 @@ X-API-Key: <provisioning-api-key>
 ```
 
 **Important:**
-- Client secret is NOT returned in this response
-- Use the one-time retrieval token to get the secret within 10 minutes
+- Client secret is returned ONLY ONCE in the creation response - store it securely
+- The secret is transmitted over TLS and never logged
 - PUT is idempotent - repeated calls update configuration without creating new credentials
 
 **Error Responses:**
@@ -839,214 +919,6 @@ curl -X PUT https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4
       "tight_mode_threshold_pct": 90
     }
   }'
-```
-
----
-
-### Credential Rotation
-
-#### POST /orgs/{org_id}/credentials/rotate
-
-Rotate client credentials for an organization. Generates new client_secret while keeping client_id.
-
-**Path Parameters:**
-- `org_id` (string, required) - Organization UUID
-
-**Request Headers:**
-```
-Content-Type: application/json
-X-API-Key: <provisioning-api-key>
-```
-
-**Request Body:**
-
-```json
-{
-  "grace_period_hours": 24
-}
-```
-
-**Field Descriptions:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `grace_period_hours` | integer | No | Hours before old secret expires (0-168, default: 24) |
-
-**Response: 200 OK**
-
-```json
-{
-  "org_id": "550e8400-e29b-41d4-a716-446655440000",
-  "client_id": "org-550e8400-e29b-41d4-a716-446655440000",
-  "secret_retrieval": {
-    "url": "/orgs/550e8400-e29b-41d4-a716-446655440000/credentials/secret?token=9e1f8791-9647-62f0-c938-668877662112",
-    "token": "9e1f8791-9647-62f0-c938-668877662112",
-    "expires_at": "2026-01-23T15:40:45Z"
-  },
-  "rotation": {
-    "rotated_at": "2026-01-23T15:30:45Z",
-    "old_secret_expires_at": "2026-01-24T15:30:45Z",
-    "grace_period_hours": 24
-  }
-}
-```
-
-**Notes:**
-- Old secret remains valid during grace period for zero-downtime rotation
-- After grace period, old secret is permanently invalidated
-- Use one-time retrieval token to get new secret
-
-**Example Request:**
-
-```bash
-curl -X POST https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/credentials/rotate \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: <provisioning-api-key>" \
-  --data '{"grace_period_hours": 24}'
-```
-
----
-
-#### POST /orgs/{org_id}/apps/{app_id}/credentials/rotate
-
-Rotate client credentials for an application.
-
-**Path Parameters:**
-- `org_id` (string, required) - Organization UUID
-- `app_id` (string, required) - Application identifier
-
-**Request Headers:**
-```
-Content-Type: application/json
-X-API-Key: <provisioning-api-key>
-```
-
-**Request Body:**
-
-```json
-{
-  "grace_period_hours": 24
-}
-```
-
-**Response: 200 OK**
-
-Same structure as org credential rotation, with additional `app_id` field.
-
-```json
-{
-  "org_id": "550e8400-e29b-41d4-a716-446655440000",
-  "app_id": "app-production-api",
-  "client_id": "org-550e8400-e29b-41d4-a716-446655440000-app-app-production-api",
-  "secret_retrieval": {
-    "url": "/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/credentials/secret?token=af209802-a758-73g1-d049-779988773223",
-    "token": "af209802-a758-73g1-d049-779988773223",
-    "expires_at": "2026-01-23T15:40:45Z"
-  },
-  "rotation": {
-    "rotated_at": "2026-01-23T15:30:45Z",
-    "old_secret_expires_at": "2026-01-24T15:30:45Z",
-    "grace_period_hours": 24
-  }
-}
-```
-
----
-
-### GET /orgs/{org_id}/credentials/secret
-
-Retrieve client secret using one-time token (from registration or rotation response).
-
-**Path Parameters:**
-- `org_id` (string, required) - Organization UUID
-
-**Query Parameters:**
-- `token` (string, required) - One-time retrieval token
-
-**Request Headers:**
-```
-X-API-Key: <provisioning-api-key>
-```
-
-**Response: 200 OK**
-
-```json
-{
-  "client_id": "org-550e8400-e29b-41d4-a716-446655440000",
-  "client_secret": "YnVmZmVyLWlzLWEtYmFzZTY0LWVuY29kZWQtc2VjcmV0LXZhbHVl",
-  "retrieved_at": "2026-01-23T15:35:45Z",
-  "expires_at": "2026-04-23T15:30:45Z",
-  "note": "This secret will not be shown again. Store securely."
-}
-```
-
-**Error Responses:**
-
-**401 Unauthorized - Invalid or Expired Token**
-```json
-{
-  "error": "UNAUTHORIZED",
-  "message": "One-time retrieval token invalid or expired",
-  "details": {
-    "token_status": "expired",
-    "expired_at": "2026-01-23T15:40:45Z"
-  },
-  "timestamp": "2026-01-23T15:50:45Z"
-}
-```
-
-**404 Not Found - Token Already Used**
-```json
-{
-  "error": "NOT_FOUND",
-  "message": "Token has already been used",
-  "details": {
-    "retrieved_at": "2026-01-23T15:32:00Z"
-  },
-  "hint": "If you lost the secret, rotate credentials to generate new one",
-  "timestamp": "2026-01-23T15:35:45Z"
-}
-```
-
-**Example Request:**
-
-```bash
-curl -X GET "https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/credentials/secret?token=7c9e6679-7425-40de-944b-e07fc1f90ae7" \
-  -H "X-API-Key: <provisioning-api-key>"
-```
-
-**Notes:**
-- Token expires after 10 minutes or first use (whichever comes first)
-- Token can only be used once
-- Response includes full client_secret for secure storage
-
----
-
-### GET /orgs/{org_id}/apps/{app_id}/credentials/secret
-
-Retrieve application client secret using one-time token.
-
-**Path Parameters:**
-- `org_id` (string, required) - Organization UUID
-- `app_id` (string, required) - Application identifier
-
-**Query Parameters:**
-- `token` (string, required) - One-time retrieval token
-
-**Request Headers:**
-```
-X-API-Key: <provisioning-api-key>
-```
-
-**Response: 200 OK**
-
-Same structure as org secret retrieval, with app-specific client_id.
-
-**Example Request:**
-
-```bash
-curl -X GET "https://cost-keeper.<some-domain>.com/api/v1/orgs/550e8400-e29b-41d4-a716-446655440000/apps/app-production-api/credentials/secret?token=8d0f7680-8536-51ef-b827-557766551001" \
-  -H "X-API-Key: <provisioning-api-key>"
 ```
 
 ---

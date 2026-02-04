@@ -43,7 +43,7 @@ This database design supports the Bedrock Price Keeper REST service with the fol
 | **DailyTotal** | Aggregated totals | Every 60s (by aggregator) |  Controlled cadence |
 | **PricingCache** | Bedrock pricing | Once per day |  None |
 | **RevokedTokens** | Token revocation list | Rare (on revoke) |  None |
-| **SecretRetrievalTokens** | One-time secret tokens | Rare (on registration/rotation) |  None |
+| **SecretRetrievalTokens** | DEPRECATED - No longer used | N/A |  None |
 
 ---
 
@@ -623,67 +623,15 @@ token_jti: "550e8400-e29b-41d4-a716-446655440000-1737640800"
 
 ---
 
-### 7. SecretRetrievalTokens Table
+### 7. SecretRetrievalTokens Table (DEPRECATED)
 
-**Purpose**: Store one-time tokens for secure secret retrieval after registration/rotation
+**Status**: DEPRECATED - This table is no longer used.
 
-**Security**: Tokens expire after 10 minutes or first use
+**Reason**: Secrets are now returned directly in registration/rotation responses instead of requiring a separate retrieval step. This simplifies the client integration flow (one HTTP call instead of two) and is more efficient while maintaining the same security level (secrets still only shown once, transmitted over TLS).
 
-#### Primary Key
+**Migration**: The table can be safely removed in a future database migration. No data needs to be preserved.
 
-- **token** (string): Cryptographically random UUID for one-time secret retrieval
-- No sort key (single-key table, one item per token)
-
-#### Key Pattern
-
-```
-token: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
-```
-
-#### Attributes
-
-- `org_id` (string)
-- `app_id` (string, optional - omitted for org-level tokens)
-- `secret_type` (string: `"org"` | `"app"`)
-- `client_id` (string: the client_id this secret belongs to)
-- `created_at_epoch` (number)
-- `expires_at_epoch` (number, TTL attribute - created + 600 seconds)
-- `used` (boolean, default: `false`)
-- `used_at_epoch` (number, optional - set when retrieved)
-
-**Example:**
-```json
-{
-  "token": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "org_id": "550e8400-e29b-41d4-a716-446655440000",
-  "app_id": "app-production-api",
-  "secret_type": "app",
-  "client_id": "org-550e8400-e29b-41d4-a716-446655440000-app-app-production-api",
-  "created_at_epoch": 1737640800,
-  "expires_at_epoch": 1737641400,
-  "used": false
-}
-```
-
-#### Access Pattern
-
-- **Check token validity**: `GetItem(token={token_uuid})`
-  - Verify `expires_at_epoch > now`
-  - Verify `used == false`
-- **Mark token as used**: `UpdateItem(token={token_uuid}, ...)` with condition:
-  ```
-  ConditionExpression: "used = :false AND expires_at_epoch > :now"
-  UpdateExpression: "SET used = :true, used_at_epoch = :timestamp"
-  ```
-  - First use wins (prevents replay)
-  - Expired tokens fail condition
-- **Cleanup**: DynamoDB TTL deletes after expiry
-
-**Security Notes**:
-- Token is cryptographically random UUID
-- Single-use prevents replay attacks
-- 10-minute expiry window limits exposure
-- Returned secret should be transmitted over TLS only
+**Previous Purpose**: Stored one-time tokens for secure secret retrieval after registration/rotation
 
 ---
 
@@ -846,51 +794,20 @@ token: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
    GetItem: Config(org_key="ORG#{org_id}", resource_key="") or (resource_key="APP#{app_id}")
    ```
 2. Generate new client_secret and hash with bcrypt
-3. Create secret retrieval token (UUID)
-4. Update config with new secret and grace period:
+3. Update config with new secret and grace period:
    ```
    UpdateItem: Config
      SET client_secret_hash = :new_hash,
          client_secret_created_at_epoch = :now,
          client_secret_rotation_grace_expires_at_epoch = :grace_expiry
    ```
-5. Store retrieval token:
-   ```
-   PutItem: SecretRetrievalTokens(token={token_uuid}, ...)
-   ```
-6. Return retrieval token to admin
+4. Return client_id and new client_secret directly in response
 
-**Database operations**: 1 GetItem + 1 UpdateItem + 1 PutItem
+**Database operations**: 1 GetItem + 1 UpdateItem
 
 **Grace period**: Old secret remains valid for configured hours (0-168)
 
----
-
-### 7. Secret Retrieval (One-Time)
-
-**Frequency**: Once per registration/rotation
-
-**Steps:**
-1. Validate retrieval token:
-   ```
-   GetItem: SecretRetrievalTokens(token={token_uuid})
-   ```
-2. Verify token not expired and not used
-3. Mark token as used (with condition):
-   ```
-   UpdateItem: SecretRetrievalTokens
-     ConditionExpression: "used = :false AND expires_at_epoch > :now"
-     UpdateExpression: "SET used = :true, used_at_epoch = :timestamp"
-   ```
-4. Read config to get client credentials:
-   ```
-   GetItem: Config(org_key="ORG#{org_id}", resource_key="") or (resource_key="APP#{app_id}")
-   ```
-5. Return client_id and client_secret in response
-
-**Database operations**: 1 GetItem + 1 UpdateItem (conditional) + 1 GetItem
-
-**Security**: First use wins (prevents replay), 10-minute expiry window
+**Note**: Rotation endpoints are not yet implemented.
 
 ---
 
@@ -1019,7 +936,6 @@ Shard count is **immutable per org** - set at creation, cannot change without da
 | Cost submissions | 25.9M writes (UsageAggSharded) | $0.32 |
 | Aggregator writes | 1,440/day × 30 = 43,200 | $0.00 |
 | Token revocations | Minimal (~10/month) | $0.00 |
-| Secret retrievals | Minimal (~20/month) | $0.00 |
 | **Storage** |
 | ~0.5 GB + token tables | < $0.30 |
 | **Total** | | **~$14.75** |
@@ -1150,8 +1066,6 @@ UpdateItem: StickyState
 - Sticky flip rate: How often fallback chains activate
 - Token revocation rate: Frequency of token revocations
 - Revocation check cache hit rate: Effectiveness of caching strategy
-- Secret retrieval token usage: Track token generation and consumption
-- Failed secret retrievals: Monitor expired or reused tokens
 
 ---
 

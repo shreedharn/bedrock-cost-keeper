@@ -22,17 +22,10 @@ class RefreshTokenResponse(BaseModel):
     expires_in: int
 
 
-class SecretRetrievalInfo(BaseModel):
-    """Information about secret retrieval."""
-    url: str
-    token: str
-    expires_at: datetime
-
-
 class CredentialsInfo(BaseModel):
     """Client credentials information."""
     client_id: str
-    secret_retrieval: SecretRetrievalInfo
+    client_secret: Optional[str] = None
 
 
 class ConfigInfo(BaseModel):
@@ -76,7 +69,7 @@ class CredentialRotationResponse(BaseModel):
     org_id: str
     app_id: Optional[str] = None
     client_id: str
-    secret_retrieval: SecretRetrievalInfo
+    client_secret: str
     rotation: RotationInfo
 
 
@@ -88,15 +81,6 @@ class InferenceProfileResponse(BaseModel):
     status: str
     description: Optional[str] = None
     created_at: Optional[datetime] = None
-
-
-class SecretRetrievalResponse(BaseModel):
-    """Response model for secret retrieval."""
-    client_id: str
-    client_secret: str
-    retrieved_at: datetime
-    expires_at: datetime
-    note: str = "This secret will not be shown again. Store securely."
 
 
 class ModelInfo(BaseModel):

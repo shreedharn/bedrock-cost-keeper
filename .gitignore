@@ -110,3 +110,4 @@ test_results/
 *_Verification.md
 
 error.txt
+target/**

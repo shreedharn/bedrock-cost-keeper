@@ -25,8 +25,8 @@ class DynamoDBBridge(DatabaseBridge):
                 'aws_access_key_id': settings.aws_access_key_id,
                 'aws_secret_access_key': settings.aws_secret_access_key
             }
-            if settings.aws_endpoint_url:
-                kwargs['endpoint_url'] = settings.aws_endpoint_url
+            if settings.dynamodb_endpoint_url:
+                kwargs['endpoint_url'] = settings.dynamodb_endpoint_url
 
             self._dynamodb = await self.session.resource('dynamodb', **kwargs).__aenter__()
         return self._dynamodb
@@ -40,7 +40,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         try:
             response = await table.get_item(
-                Key={'org_key': f'ORG#{org_id}', 'resource_key': ''}
+                Key={'org_key': f'ORG#{org_id}', 'resource_key': '#'}
             )
             return response.get('Item')
         except ClientError:
@@ -66,7 +66,7 @@ class DynamoDBBridge(DatabaseBridge):
 
         item = {
             'org_key': f'ORG#{org_id}',
-            'resource_key': '',
+            'resource_key': '#',  # Root config marker
             **config,
             'updated_at_epoch': int(time.time())
         }
@@ -378,60 +378,10 @@ class DynamoDBBridge(DatabaseBridge):
 
         await table.put_item(Item=item)
 
-    # ==================== Secret Retrieval Token Operations ====================
-
-    async def create_secret_retrieval_token(
-        self,
-        token_uuid: str,
-        org_id: str,
-        app_id: Optional[str],
-        secret_type: str,
-        client_id: str,
-        expires_at_epoch: int
-    ) -> None:
-        """Create a one-time secret retrieval token."""
-        dynamodb = await self._get_dynamodb()
-        table = await dynamodb.Table(settings.dynamodb_secret_retrieval_tokens_table)
-
-        item = {
-            'token': token_uuid,
-            'org_id': org_id,
-            'secret_type': secret_type,
-            'client_id': client_id,
-            'created_at_epoch': int(time.time()),
-            'expires_at_epoch': expires_at_epoch,
-            'used': False
-        }
-
-        if app_id:
-            item['app_id'] = app_id
-
-        await table.put_item(Item=item)
-
-    async def use_secret_retrieval_token(self, token_uuid: str) -> Optional[Dict[str, Any]]:
-        """Mark a secret retrieval token as used (first-use-wins)."""
-        dynamodb = await self._get_dynamodb()
-        table = await dynamodb.Table(settings.dynamodb_secret_retrieval_tokens_table)
-
-        now = int(time.time())
-
-        try:
-            response = await table.update_item(
-                Key={'token': token_uuid},
-                UpdateExpression='SET used = :true, used_at_epoch = :now',
-                ConditionExpression='used = :false AND expires_at_epoch > :now',
-                ExpressionAttributeValues={
-                    ':true': True,
-                    ':false': False,
-                    ':now': now
-                },
-                ReturnValues='ALL_NEW'
-            )
-            return response.get('Attributes')
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-                return None
-            raise
+    # ==================== Secret Retrieval Token Operations (DEPRECATED) ====================
+    # NOTE: SecretRetrievalTokens table is deprecated. Secrets are now returned directly
+    # in registration/rotation responses instead of requiring a separate retrieval step.
+    # The table can be removed in a future migration.
 
     # ==================== Inference Profile Operations ====================
 

@@ -14,7 +14,6 @@ class TestOrgRegistrationEndpoint:
         """Test successful new organization registration."""
         mock_db.get_org_config = AsyncMock(return_value=None)
         mock_db.put_org_config = AsyncMock()
-        mock_db.create_secret_retrieval_token = AsyncMock()
 
         with patch('src.core.config.main_config', {
             'model_labels': {
@@ -35,10 +34,11 @@ class TestOrgRegistrationEndpoint:
         assert data["status"] == "created"
         assert "credentials" in data
         assert "client_id" in data["credentials"]
-        assert "secret_retrieval" in data["credentials"]
+        assert "client_secret" in data["credentials"]
         assert data["credentials"]["client_id"] == "org-test-org-123"
+        # Secret should be returned directly, not via retrieval token
+        assert len(data["credentials"]["client_secret"]) > 0
         mock_db.put_org_config.assert_called_once()
-        mock_db.create_secret_retrieval_token.assert_called_once()
 
     def test_update_existing_org(
         self, test_client, mock_db, provisioning_headers,
@@ -142,7 +142,6 @@ class TestAppRegistrationEndpoint:
         mock_db.get_org_config = AsyncMock(return_value=mock_org_config)
         mock_db.get_app_config = AsyncMock(return_value=None)
         mock_db.put_app_config = AsyncMock()
-        mock_db.create_secret_retrieval_token = AsyncMock()
 
         response = test_client.put(
             "/api/v1/orgs/test-org-123/apps/test-app",
@@ -157,8 +156,9 @@ class TestAppRegistrationEndpoint:
         assert data["status"] == "created"
         assert "credentials" in data
         assert data["credentials"]["client_id"] == "org-test-org-123-app-test-app"
+        assert "client_secret" in data["credentials"]
+        assert len(data["credentials"]["client_secret"]) > 0
         mock_db.put_app_config.assert_called_once()
-        mock_db.create_secret_retrieval_token.assert_called_once()
 
     def test_update_existing_app(
         self, test_client, mock_db, provisioning_headers,

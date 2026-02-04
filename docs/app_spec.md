@@ -473,23 +473,87 @@ Sharded counters prevent hot partitions. Start evaluating with 8 Shards.
 
 ## Security Considerations
 
-### Authentication
+### Secret Management
 
-- API requires AWS Signature V4 authentication
-- Org/App identifiers in path prevent cross-tenant access
-- IAM policies restrict access per organization
+The system uses **three types of secrets** with different lifecycle and access patterns:
+
+#### 1. Provisioning API Key (Admin Secret)
+- **Purpose:** Administrative setup of orgs and apps
+- **Quantity:** 1 shared key
+- **Storage:** AWS Secrets Manager (production) or environment variable (dev)
+- **Access:** DevOps/admin personnel only
+- **Rotation:** Manual, infrequent (quarterly or on compromise)
+- **Transmission:** X-API-Key header
+
+#### 2. Organization Client Secrets
+- **Purpose:** Org-level authentication (when quota_scope = "ORG")
+- **Quantity:** 1 per organization
+- **Generated:** During org registration via provisioning API
+- **Storage:** Organization's secure credential store
+- **Access:** Org administrators
+- **Rotation:** Recommended every 90 days
+- **Lifecycle:** Create → Use → Rotate → Revoke (on compromise)
+
+#### 3. Application Client Secrets (Most Common)
+- **Purpose:** App-level authentication (when quota_scope = "APP")
+- **Quantity:** 1 per application
+- **Generated:** During app registration via provisioning API
+- **Storage:** Application's secure credential store (e.g., AWS Secrets Manager)
+- **Access:** Application runtime environment
+- **Rotation:** Recommended every 90 days
+- **Lifecycle:** Create → Use → Rotate → Revoke (on compromise)
+
+**Security Best Practices:**
+- Never commit secrets to version control
+- Use environment variables or secret management services
+- Rotate application secrets every 90 days
+- Implement secret rotation with zero-downtime (grace period)
+- Monitor for unauthorized access attempts
+- Revoke tokens immediately upon compromise detection
+
+### Authentication Flow
+
+**Two-Tier Authentication Model:**
+
+1. **Provisioning API (Setup Phase):**
+   - Static API Key authentication
+   - Used by admin/DevOps for org/app management
+   - Endpoints: PUT /orgs/{org_id}, PUT /orgs/{org_id}/apps/{app_id}
+
+2. **Runtime API (Operational Phase):**
+   - OAuth 2.0 Client Credentials flow
+   - JWT Bearer token authentication
+   - Client uses client_id + client_secret → Receives access token (1hr) + refresh token (7 days)
+   - All operational endpoints require JWT Bearer token
+   - Token validation includes: signature check, expiry check, revocation check
+
+**Multi-Tenancy Protection:**
+- JWT tokens include org_id and app_id claims
+- Service validates token claims match URL path parameters
+- Prevents cross-tenant access even with valid tokens
+- Each app/org can only access its own data
 
 ### Data Privacy
 
 - No prompt/response content stored
-- Only metadata: tokens, cost, model used
-- TTL-based data retention (configurable)
+- Only metadata: tokens, cost, model used, timestamps
+- TTL-based data retention (configurable, default 90 days)
+- PII-free operation (no user identifiers stored)
 
 ### Rate Limiting
 
 - Per-client rate limits on all endpoints
+- Separate limits for provisioning vs runtime APIs
 - Prevents single client from overwhelming service
 - Configured in main config.yaml
+- Returns 429 Too Many Requests when exceeded
+
+### Encryption
+
+- **In Transit:** All API calls require TLS 1.2+
+- **At Rest:** Client secrets stored as bcrypt hashes (irreversible)
+- **JWT Tokens:** Signed with HS256 algorithm
+- **Secrets:** Never logged or stored in plain text
 
 ---
 
