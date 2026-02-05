@@ -65,6 +65,46 @@ class DatabaseBridge(ABC):
         """
         pass
 
+    @abstractmethod
+    async def rotate_org_credentials(
+        self,
+        org_id: str,
+        new_secret_hash: str,
+        old_secret_hash: str,
+        grace_expires_at_epoch: int
+    ) -> None:
+        """
+        Rotate organization credentials with grace period.
+
+        Args:
+            org_id: Organization UUID
+            new_secret_hash: Bcrypt hash of new secret
+            old_secret_hash: Bcrypt hash of current secret (to keep during grace period)
+            grace_expires_at_epoch: When grace period expires (epoch seconds)
+        """
+        pass
+
+    @abstractmethod
+    async def rotate_app_credentials(
+        self,
+        org_id: str,
+        app_id: str,
+        new_secret_hash: str,
+        old_secret_hash: str,
+        grace_expires_at_epoch: int
+    ) -> None:
+        """
+        Rotate application credentials with grace period.
+
+        Args:
+            org_id: Organization UUID
+            app_id: Application identifier
+            new_secret_hash: Bcrypt hash of new secret
+            old_secret_hash: Bcrypt hash of current secret (to keep during grace period)
+            grace_expires_at_epoch: When grace period expires (epoch seconds)
+        """
+        pass
+
     # ==================== Sticky State Operations ====================
 
     @abstractmethod

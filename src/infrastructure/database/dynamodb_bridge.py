@@ -87,6 +87,63 @@ class DynamoDBBridge(DatabaseBridge):
 
         await table.put_item(Item=item)
 
+    async def rotate_org_credentials(
+        self,
+        org_id: str,
+        new_secret_hash: str,
+        old_secret_hash: str,
+        grace_expires_at_epoch: int
+    ) -> None:
+        """Rotate organization credentials with grace period."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_config_table)
+
+        await table.update_item(
+            Key={'org_key': f'ORG#{org_id}', 'resource_key': '#'},
+            UpdateExpression=(
+                'SET client_secret_hash = :new_hash, '
+                'client_secret_hash_old = :old_hash, '
+                'client_secret_rotation_grace_expires_at_epoch = :grace_expires, '
+                'client_secret_created_at_epoch = :now, '
+                'updated_at_epoch = :now'
+            ),
+            ExpressionAttributeValues={
+                ':new_hash': new_secret_hash,
+                ':old_hash': old_secret_hash,
+                ':grace_expires': grace_expires_at_epoch,
+                ':now': int(time.time())
+            }
+        )
+
+    async def rotate_app_credentials(
+        self,
+        org_id: str,
+        app_id: str,
+        new_secret_hash: str,
+        old_secret_hash: str,
+        grace_expires_at_epoch: int
+    ) -> None:
+        """Rotate application credentials with grace period."""
+        dynamodb = await self._get_dynamodb()
+        table = await dynamodb.Table(settings.dynamodb_config_table)
+
+        await table.update_item(
+            Key={'org_key': f'ORG#{org_id}', 'resource_key': f'APP#{app_id}'},
+            UpdateExpression=(
+                'SET client_secret_hash = :new_hash, '
+                'client_secret_hash_old = :old_hash, '
+                'client_secret_rotation_grace_expires_at_epoch = :grace_expires, '
+                'client_secret_created_at_epoch = :now, '
+                'updated_at_epoch = :now'
+            ),
+            ExpressionAttributeValues={
+                ':new_hash': new_secret_hash,
+                ':old_hash': old_secret_hash,
+                ':grace_expires': grace_expires_at_epoch,
+                ':now': int(time.time())
+            }
+        )
+
     # ==================== Sticky State Operations ====================
 
     async def get_sticky_state(self, scope: str, day: str) -> Optional[Dict[str, Any]]:

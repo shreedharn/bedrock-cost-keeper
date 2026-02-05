@@ -58,6 +58,7 @@ class ManualTester:
         self.app_id = self.config['test_app_id']
         self.client_id = None
         self.client_secret = None
+        self.old_client_secret = None  # For testing credential rotation grace period
         self.inference_profile_arn = self.config.get('inference_profile_arn')
         self.model_id = self.config.get('model_id')
         self.selected_model = None
@@ -557,6 +558,193 @@ class ManualTester:
         self.pause("Review the aggregates. Press Enter to continue...")
         return True
 
+    def test_step_9_rotate_org_credentials(self) -> bool:
+        """Step 9: Rotate Organization Credentials"""
+        console.print(Panel("[bold]Step 9: Rotate Organization Credentials[/bold]"))
+
+        if not self.org_id:
+            self.log("✗ Organization ID not available. Run step 1 first.", 'ERROR')
+            return False
+
+        # Get provisioning API key
+        try:
+            secret_name = self.config['provisioning_api_key_secret_name']
+            response = self.secrets_manager.get_secret_value(SecretId=secret_name)
+            provisioning_api_key = response['SecretString']
+        except Exception as e:
+            self.log(f"✗ Failed to get provisioning API key: {e}", 'ERROR')
+            return False
+
+        # Save current credentials for grace period testing
+        self.old_client_secret = self.client_secret
+
+        # Prepare rotation request (24-hour grace period for demo)
+        url = f"{self.service_url}/api/v1/orgs/{self.org_id}/credentials/rotate"
+        headers = {
+            "X-API-Key": provisioning_api_key,
+            "Content-Type": "application/json"
+        }
+        body = {
+            "grace_period_hours": 24  # 24-hour grace period for testing
+        }
+
+        self.show_request("POST", url, headers, body)
+        self.pause()
+
+        # Execute rotation
+        try:
+            response = requests.post(url, headers=headers, json=body, timeout=self.http_timeout)
+            self.show_response(response)
+
+            if response.status_code == 200:
+                data = response.json()
+                # Update with new credentials
+                self.client_secret = data['client_secret']
+                rotation_info = data['rotation']
+
+                self.log(f"✓ Organization credentials rotated", 'SUCCESS')
+                console.print(f"\n[bold green]New Client Secret (SAVE THIS!):[/bold green] {self.client_secret}")
+                console.print(f"[bold cyan]Rotation Details:[/bold cyan]")
+                console.print(f"  Rotated At: {rotation_info['rotated_at']}")
+                console.print(f"  Grace Period: {rotation_info['grace_period_hours']} hours")
+                console.print(f"  Old Secret Expires: {rotation_info['old_secret_expires_at']}")
+                console.print(f"\n[bold yellow]Note:[/bold yellow] Old secret remains valid for {rotation_info['grace_period_hours']} hours")
+            else:
+                self.log(f"✗ Failed to rotate credentials: {response.status_code}", 'ERROR')
+                return False
+        except Exception as e:
+            self.log(f"✗ Request failed: {e}", 'ERROR')
+            return False
+
+        self.pause("Review the rotation response. Press Enter to continue...")
+        return True
+
+    def test_step_10_test_old_credentials(self) -> bool:
+        """Step 10: Test Old Credentials During Grace Period"""
+        console.print(Panel("[bold]Step 10: Test Old Credentials (Grace Period)[/bold]"))
+
+        if not hasattr(self, 'old_client_secret') or not self.old_client_secret:
+            self.log("✗ Old credentials not available. Run step 9 first.", 'ERROR')
+            return False
+
+        # Try authenticating with OLD credentials (should still work during grace period)
+        console.print("[bold yellow]Testing authentication with OLD credentials...[/bold yellow]")
+        url = f"{self.service_url}/auth/token"
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": self.client_id,
+            "client_secret": self.old_client_secret  # Using OLD secret
+        }
+
+        console.print(Panel("[bold cyan]REQUEST[/bold cyan]", expand=False))
+        console.print(f"[bold]Method:[/bold] POST")
+        console.print(f"[bold]URL:[/bold] {url}")
+        console.print(f"[bold]Testing with:[/bold] OLD credentials (during grace period)")
+
+        self.pause()
+
+        try:
+            response = requests.post(url, headers=headers, data=data, timeout=self.http_timeout)
+            self.show_response(response)
+
+            if response.status_code == 200:
+                self.log("✓ Authentication successful with OLD credentials", 'SUCCESS')
+                console.print(f"\n[bold green]✓ Zero-downtime rotation confirmed![/bold green]")
+                console.print(f"[bold]Old credentials still work during grace period[/bold]")
+            else:
+                self.log(f"✗ Authentication failed with old credentials: {response.status_code}", 'ERROR')
+                self.log("This might be expected if grace period expired", 'WARNING')
+                return False
+        except Exception as e:
+            self.log(f"✗ Request failed: {e}", 'ERROR')
+            return False
+
+        # Now test with NEW credentials to confirm they also work
+        console.print("\n[bold yellow]Now testing authentication with NEW credentials...[/bold yellow]")
+        data['client_secret'] = self.client_secret  # Using NEW secret
+
+        self.pause()
+
+        try:
+            response = requests.post(url, headers=headers, data=data, timeout=self.http_timeout)
+
+            if response.status_code == 200:
+                self.log("✓ Authentication successful with NEW credentials", 'SUCCESS')
+                console.print(f"[bold green]✓ Both old and new credentials work![/bold green]")
+            else:
+                self.log(f"✗ Authentication failed with new credentials: {response.status_code}", 'ERROR')
+                return False
+        except Exception as e:
+            self.log(f"✗ Request failed: {e}", 'ERROR')
+            return False
+
+        self.pause("Review the grace period behavior. Press Enter to continue...")
+        return True
+
+    def test_step_11_rotate_app_credentials(self) -> bool:
+        """Step 11: Rotate Application Credentials"""
+        console.print(Panel("[bold]Step 11: Rotate Application Credentials[/bold]"))
+
+        if not self.org_id or not self.app_id:
+            self.log("✗ Organization or Application ID not available. Run steps 1-2 first.", 'ERROR')
+            return False
+
+        # Get provisioning API key
+        try:
+            secret_name = self.config['provisioning_api_key_secret_name']
+            response = self.secrets_manager.get_secret_value(SecretId=secret_name)
+            provisioning_api_key = response['SecretString']
+        except Exception as e:
+            self.log(f"✗ Failed to get provisioning API key: {e}", 'ERROR')
+            return False
+
+        # Prepare rotation request (168-hour/7-day grace period - default)
+        url = f"{self.service_url}/api/v1/orgs/{self.org_id}/apps/{self.app_id}/credentials/rotate"
+        headers = {
+            "X-API-Key": provisioning_api_key,
+            "Content-Type": "application/json"
+        }
+        body = {
+            "grace_period_hours": 168  # 7 days default
+        }
+
+        self.show_request("POST", url, headers, body)
+        self.pause()
+
+        # Execute rotation
+        try:
+            response = requests.post(url, headers=headers, json=body, timeout=self.http_timeout)
+            self.show_response(response)
+
+            if response.status_code == 200:
+                data = response.json()
+                # Update with new app credentials
+                self.client_id = data['client_id']
+                self.client_secret = data['client_secret']
+                rotation_info = data['rotation']
+
+                self.log(f"✓ Application credentials rotated", 'SUCCESS')
+                console.print(f"\n[bold green]New App Client Secret (SAVE THIS!):[/bold green] {self.client_secret}")
+                console.print(f"[bold cyan]Rotation Details:[/bold cyan]")
+                console.print(f"  Org ID: {data['org_id']}")
+                console.print(f"  App ID: {data['app_id']}")
+                console.print(f"  Client ID: {data['client_id']}")
+                console.print(f"  Rotated At: {rotation_info['rotated_at']}")
+                console.print(f"  Grace Period: {rotation_info['grace_period_hours']} hours")
+                console.print(f"  Old Secret Expires: {rotation_info['old_secret_expires_at']}")
+            else:
+                self.log(f"✗ Failed to rotate app credentials: {response.status_code}", 'ERROR')
+                return False
+        except Exception as e:
+            self.log(f"✗ Request failed: {e}", 'ERROR')
+            return False
+
+        self.pause("Review the app rotation response. Press Enter to continue...")
+        return True
+
     def run_all_tests(self):
         """Run all test steps"""
         console.clear()
@@ -579,6 +767,9 @@ class ManualTester:
             ("Invoke Bedrock", self.test_step_6_invoke_bedrock),
             ("Submit Usage", self.test_step_7_submit_usage),
             ("Check Aggregates", self.test_step_8_check_aggregates),
+            ("Rotate Organization Credentials", self.test_step_9_rotate_org_credentials),
+            ("Test Old Credentials (Grace Period)", self.test_step_10_test_old_credentials),
+            ("Rotate Application Credentials", self.test_step_11_rotate_app_credentials),
         ]
 
         for i, (name, func) in enumerate(steps, 1):

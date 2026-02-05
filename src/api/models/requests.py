@@ -109,6 +109,16 @@ class UsageSubmissionRequest(BaseModel):
 CostSubmissionRequest = UsageSubmissionRequest
 
 
+class CredentialRotationRequest(BaseModel):
+    """Request model for credential rotation."""
+    grace_period_hours: int = Field(
+        default=168,  # 7 days default
+        ge=0,
+        le=168,
+        description="Hours before old secret expires (0-168 hours = 0-7 days)"
+    )
+
+
 class BatchUsageSubmissionRequest(BaseModel):
     """Request model for batch usage submission."""
     requests: List[UsageSubmissionRequest] = Field(..., min_length=1, max_length=100)

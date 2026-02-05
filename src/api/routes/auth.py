@@ -1,5 +1,6 @@
 """Authentication endpoints."""
 
+import time
 from typing import Annotated
 from fastapi import APIRouter, Depends, Header
 
@@ -57,20 +58,27 @@ async def obtain_token(
     if config.get('client_id') != request.client_id:
         raise UnauthorizedException("Invalid client credentials")
 
-    # Verify client_secret
+    # Verify client_secret with grace period support
     stored_secret_hash = config.get('client_secret_hash')
     if not stored_secret_hash:
         raise UnauthorizedException("Invalid client credentials")
 
-    if not jwt_handler.verify_secret(request.client_secret, stored_secret_hash):
-        raise UnauthorizedException("Invalid client credentials")
+    # Try new secret first
+    secret_valid = jwt_handler.verify_secret(request.client_secret, stored_secret_hash)
 
-    # Check if rotation grace period active
-    grace_expires = config.get('client_secret_rotation_grace_expires_at_epoch')
-    if grace_expires:
-        # During grace period, verify against old secret if new secret doesn't match
-        # (Implementation would need old secret hash stored)
-        pass
+    # If new secret fails, check if we're in grace period and try old secret
+    if not secret_valid:
+        grace_expires = config.get('client_secret_rotation_grace_expires_at_epoch')
+        stored_old_secret_hash = config.get('client_secret_hash_old')
+
+        # If within grace period and old hash exists, try old secret
+        if grace_expires and stored_old_secret_hash:
+            if time.time() < grace_expires:
+                secret_valid = jwt_handler.verify_secret(request.client_secret, stored_old_secret_hash)
+
+    # Reject if both secrets failed
+    if not secret_valid:
+        raise UnauthorizedException("Invalid client credentials")
 
     # Generate tokens
     access_token, _ = jwt_handler.create_access_token(

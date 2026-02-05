@@ -2,12 +2,12 @@
 
 from fastapi import APIRouter, Depends, Path
 from typing import Annotated
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
-from ..models.requests import OrgRegistrationRequest, AppRegistrationRequest
+from ..models.requests import OrgRegistrationRequest, AppRegistrationRequest, CredentialRotationRequest
 from ..models.responses import (
-    OrgRegistrationResponse, AppRegistrationResponse,
-    CredentialsInfo, ConfigInfo
+    OrgRegistrationResponse, AppRegistrationResponse, CredentialRotationResponse,
+    CredentialsInfo, ConfigInfo, RotationInfo
 )
 from ...infrastructure.database.dynamodb_bridge import DynamoDBBridge
 from ...infrastructure.security.jwt_handler import JWTHandler
@@ -174,3 +174,118 @@ async def register_or_update_app(
         response.updated_at = datetime.now(timezone.utc)
 
     return response
+
+
+@router.post("/orgs/{org_id}/credentials/rotate", response_model=CredentialRotationResponse)
+async def rotate_org_credentials(
+    org_id: Annotated[str, Path(description="Organization UUID")],
+    request: CredentialRotationRequest,
+    db: Annotated[DynamoDBBridge, Depends(get_db_bridge)],
+    _: Annotated[bool, Depends(verify_provisioning_api_key)]
+):
+    """
+    Rotate organization credentials.
+
+    Generates new client_secret while keeping client_id. Old secret remains valid
+    during grace period for zero-downtime rotation.
+    """
+    # Verify org exists
+    existing_org = await db.get_org_config(org_id)
+    if not existing_org:
+        raise InvalidConfigException(f"Organization {org_id} not found")
+
+    # Generate new secret
+    new_secret = jwt_handler.generate_secret()
+    new_secret_hash = jwt_handler.hash_secret(new_secret)
+    old_secret_hash = existing_org.get("client_secret_hash")
+
+    # Calculate grace period expiration
+    now = datetime.now(timezone.utc)
+    grace_period_seconds = request.grace_period_hours * 3600
+    grace_expires_at = now + timedelta(seconds=grace_period_seconds)
+    grace_expires_at_epoch = int(grace_expires_at.timestamp())
+
+    # Rotate credentials in database
+    await db.rotate_org_credentials(
+        org_id=org_id,
+        new_secret_hash=new_secret_hash,
+        old_secret_hash=old_secret_hash,
+        grace_expires_at_epoch=grace_expires_at_epoch
+    )
+
+    # Build response
+    client_id = f"org-{org_id}"
+    response = CredentialRotationResponse(
+        org_id=org_id,
+        client_id=client_id,
+        client_secret=new_secret,
+        rotation=RotationInfo(
+            rotated_at=now,
+            old_secret_expires_at=grace_expires_at,
+            grace_period_hours=request.grace_period_hours
+        )
+    )
+
+    return response
+
+
+@router.post("/orgs/{org_id}/apps/{app_id}/credentials/rotate", response_model=CredentialRotationResponse)
+async def rotate_app_credentials(
+    org_id: Annotated[str, Path(description="Organization UUID")],
+    app_id: Annotated[str, Path(description="Application identifier")],
+    request: CredentialRotationRequest,
+    db: Annotated[DynamoDBBridge, Depends(get_db_bridge)],
+    _: Annotated[bool, Depends(verify_provisioning_api_key)]
+):
+    """
+    Rotate application credentials.
+
+    Generates new client_secret while keeping client_id. Old secret remains valid
+    during grace period for zero-downtime rotation.
+    """
+    # Verify org exists
+    org_config = await db.get_org_config(org_id)
+    if not org_config:
+        raise InvalidConfigException(f"Organization {org_id} not found")
+
+    # Verify app exists
+    existing_app = await db.get_app_config(org_id, app_id)
+    if not existing_app:
+        raise InvalidConfigException(f"Application {app_id} not found in organization {org_id}")
+
+    # Generate new secret
+    new_secret = jwt_handler.generate_secret()
+    new_secret_hash = jwt_handler.hash_secret(new_secret)
+    old_secret_hash = existing_app.get("client_secret_hash")
+
+    # Calculate grace period expiration
+    now = datetime.now(timezone.utc)
+    grace_period_seconds = request.grace_period_hours * 3600
+    grace_expires_at = now + timedelta(seconds=grace_period_seconds)
+    grace_expires_at_epoch = int(grace_expires_at.timestamp())
+
+    # Rotate credentials in database
+    await db.rotate_app_credentials(
+        org_id=org_id,
+        app_id=app_id,
+        new_secret_hash=new_secret_hash,
+        old_secret_hash=old_secret_hash,
+        grace_expires_at_epoch=grace_expires_at_epoch
+    )
+
+    # Build response
+    client_id = f"org-{org_id}-app-{app_id}"
+    response = CredentialRotationResponse(
+        org_id=org_id,
+        app_id=app_id,
+        client_id=client_id,
+        client_secret=new_secret,
+        rotation=RotationInfo(
+            rotated_at=now,
+            old_secret_expires_at=grace_expires_at,
+            grace_period_hours=request.grace_period_hours
+        )
+    )
+
+    return response
+
