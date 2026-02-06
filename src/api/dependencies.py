@@ -1,5 +1,6 @@
 """FastAPI dependencies for authentication and common operations."""
 
+import hmac
 from typing import Annotated
 from fastapi import Depends, Header
 from ..infrastructure.security.jwt_handler import JWTHandler
@@ -100,7 +101,8 @@ def verify_provisioning_api_key(
     """
 
 
-    if x_api_key != settings.provisioning_api_key:
+    # Use constant-time comparison to prevent timing attacks
+    if not hmac.compare_digest(x_api_key, settings.provisioning_api_key):
         raise UnauthorizedException("Invalid API key")
 
     return True

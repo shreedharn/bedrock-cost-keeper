@@ -99,10 +99,12 @@ class JWTHandler:
             UnauthorizedException: If token is invalid or expired
         """
         try:
+            # SECURITY: Explicitly pass algorithms list to prevent algorithm confusion attacks
+            # PyJWT 2.4.0+ (currently 2.10.1) requires algorithms parameter
             payload = jwt.decode(
                 token,
                 settings.jwt_secret_key,
-                algorithms=[settings.jwt_algorithm]
+                algorithms=[settings.jwt_algorithm]  # HS256 only
             )
             return payload
         except jwt.InvalidTokenError as e:

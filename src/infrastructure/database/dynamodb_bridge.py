@@ -1,6 +1,7 @@
 """DynamoDB implementation of the database bridge."""
 
 import time
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import aioboto3
 from botocore.exceptions import ClientError
@@ -179,7 +180,8 @@ class DynamoDBBridge(DatabaseBridge):
             'active_model_label': active_model_label,
             'active_model_index': active_model_index,
             'reason': reason,
-            'activated_at_epoch': now
+            'activated_at_epoch': now,
+            'expires_at_epoch': int((datetime.utcnow() + timedelta(hours=24)).timestamp())  # TTL: 24 hours
         }
 
         if previous_model_label:
@@ -393,7 +395,8 @@ class DynamoDBBridge(DatabaseBridge):
             'model_id': bedrock_model_id,
             'price_key': date,
             **pricing_data,
-            'fetched_at_epoch': int(time.time())
+            'fetched_at_epoch': int(time.time()),
+            'expires_at_epoch': int((datetime.utcnow() + timedelta(days=7)).timestamp())  # TTL: 7 days
         }
 
         await table.put_item(Item=item)

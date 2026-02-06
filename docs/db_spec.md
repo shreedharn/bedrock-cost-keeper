@@ -60,11 +60,11 @@ This database design supports the Bedrock Price Keeper REST service with the fol
 #### Primary Key
 
 - **org_key** (string): `ORG#{org_id}` - Organization partition, may include app for inference profiles
-- **resource_key** (string): `""` (empty) for org config, or `APP#{app_id}` for app config, or `PROFILE#{profile_label}` for inference profiles
+- **resource_key** (string): `"#"` (root config marker) for org config, or `APP#{app_id}` for app config, or `PROFILE#{profile_label}` for inference profiles
 
 #### Access Patterns
 
-1. Get org config: `GetItem(org_key="ORG#{org_id}", resource_key="")`
+1. Get org config: `GetItem(org_key="ORG#{org_id}", resource_key="#")`
 2. Get app config: `GetItem(org_key="ORG#{org_id}", resource_key="APP#{app_id}")`
 3. List all apps for org: `Query(org_key="ORG#{org_id}", resource_key begins_with "APP#")`
 4. Get inference profile: `GetItem(org_key="ORG#{org_id}#APP#{app_id}", resource_key="PROFILE#{profile_label}")`
@@ -74,7 +74,7 @@ This database design supports the Bedrock Price Keeper REST service with the fol
 **Key:**
 ```
 org_key: "ORG#550e8400-e29b-41d4-a716-446655440000"
-resource_key: ""
+resource_key: "#"   # Root config marker (not empty string)
 ```
 
 **Attributes:**
@@ -100,7 +100,7 @@ resource_key: ""
 ```json
 {
   "org_key": "ORG#550e8400-e29b-41d4-a716-446655440000",
-  "resource_key": "",
+  "resource_key": "#",
   "org_name": "sample_corp",
   "timezone": "America/New_York",
   "quota_scope": "APP",

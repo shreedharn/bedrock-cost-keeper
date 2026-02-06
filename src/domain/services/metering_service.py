@@ -203,8 +203,31 @@ class MeteringService:
         scope = self._compute_scope(org_config, org_id, app_id)
         day = self._compute_org_day(effective_config['timezone'])
 
-        # Validate timestamp is within acceptable range (±24 hours of org day)
-        # TODO: Implement timestamp validation
+        # Validate timestamp is within acceptable range
+        now = datetime.now(timezone.utc)
+        time_diff_seconds = (timestamp - now).total_seconds()
+
+        # Reject if > 5 minutes in future
+        if time_diff_seconds > 300:  # 5 minutes
+            raise InvalidRequestException(
+                "Timestamp too far in future",
+                {
+                    "timestamp": timestamp.isoformat(),
+                    "current_time": now.isoformat(),
+                    "max_future_seconds": 300
+                }
+            )
+
+        # Reject if > 24 hours in past
+        if time_diff_seconds < -86400:  # 24 hours
+            raise InvalidRequestException(
+                "Timestamp too far in past",
+                {
+                    "timestamp": timestamp.isoformat(),
+                    "current_time": now.isoformat(),
+                    "max_past_seconds": 86400
+                }
+            )
 
         # Select shard
         shard_count = effective_config.get('agg_shard_count', 8)

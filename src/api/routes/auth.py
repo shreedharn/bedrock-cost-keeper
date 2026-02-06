@@ -63,21 +63,25 @@ async def obtain_token(
     if not stored_secret_hash:
         raise UnauthorizedException("Invalid client credentials")
 
-    # Try new secret first
-    secret_valid = jwt_handler.verify_secret(request.client_secret, stored_secret_hash)
+    # Always check both secrets to prevent timing leaks
+    new_secret_valid = jwt_handler.verify_secret(
+        request.client_secret,
+        stored_secret_hash
+    )
 
-    # If new secret fails, check if we're in grace period and try old secret
-    if not secret_valid:
-        grace_expires = config.get('client_secret_rotation_grace_expires_at_epoch')
-        stored_old_secret_hash = config.get('client_secret_hash_old')
+    # Check old secret if in grace period
+    old_secret_valid = False
+    grace_expires = config.get('client_secret_rotation_grace_expires_at_epoch')
+    stored_old_secret_hash = config.get('client_secret_hash_old')
 
-        # If within grace period and old hash exists, try old secret
-        if grace_expires and stored_old_secret_hash:
-            if time.time() < grace_expires:
-                secret_valid = jwt_handler.verify_secret(request.client_secret, stored_old_secret_hash)
+    if grace_expires and stored_old_secret_hash and time.time() < grace_expires:
+        old_secret_valid = jwt_handler.verify_secret(
+            request.client_secret,
+            stored_old_secret_hash
+        )
 
-    # Reject if both secrets failed
-    if not secret_valid:
+    # Validate credentials
+    if not (new_secret_valid or old_secret_valid):
         raise UnauthorizedException("Invalid client credentials")
 
     # Generate tokens

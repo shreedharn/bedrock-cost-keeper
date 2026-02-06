@@ -32,6 +32,19 @@ class Settings(BaseSettings):
     # DynamoDB endpoint (for DynamoDB Local in development)
     dynamodb_endpoint_url: Optional[str] = Field(default=None, validation_alias="DYNAMODB_ENDPOINT_URL")
 
+    # CORS Settings
+    cors_allowed_origins: str = Field(
+        default="",
+        validation_alias="CORS_ALLOWED_ORIGINS"
+    )
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS origins from comma-separated string."""
+        if not self.cors_allowed_origins:
+            return ["http://localhost:3000", "http://localhost:8000"]  # Dev default
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",")]
+
     # DynamoDB Table Names
     dynamodb_config_table: str = Field(default="bedrock-cost-keeper-config")
     dynamodb_sticky_state_table: str = Field(default="bedrock-cost-keeper-usage")
@@ -49,7 +62,7 @@ class Settings(BaseSettings):
     jwt_secret_key: Optional[str] = Field(default=None, validation_alias="JWT_SECRET_KEY")
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_seconds: int = 3600  # 1 hour
-    jwt_refresh_token_expire_seconds: int = 2592000  # 30 days
+    jwt_refresh_token_expire_seconds: int = 604800  # 7 days (security best practice)
 
     # Provisioning API Key
     provisioning_api_key: Optional[str] = Field(default=None, validation_alias="PROVISIONING_API_KEY")

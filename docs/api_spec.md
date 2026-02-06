@@ -44,7 +44,7 @@ All API requests must be authenticated using JWT bearer tokens obtained via Clie
 **Architecture:**
 - Application Load Balancer (ALB) in front of ECS Fargate service
 - Client credentials authentication (Client ID + Client Secret)
-- JWT access tokens (1 hour) and refresh tokens (30 days) for API requests
+- JWT access tokens (1 hour) and refresh tokens (7 days) for API requests
 - Service validates JWT signature and extracts claims
 
 **Two API Types:**
@@ -76,7 +76,7 @@ Content-Type: application/json
   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "token_type": "Bearer",
   "expires_in": 3600,
-  "refresh_expires_in": 2592000,
+  "refresh_expires_in": 604800,
   "scope": "org:550e8400-e29b-41d4-a716-446655440000 app:app-production-api"
 }
 ```
@@ -524,7 +524,7 @@ Content-Type: application/json
   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "token_type": "Bearer",
   "expires_in": 3600,
-  "refresh_expires_in": 2592000,
+  "refresh_expires_in": 604800,
   "scope": "org:550e8400-e29b-41d4-a716-446655440000 app:app-production-api"
 }
 ```
@@ -534,10 +534,10 @@ Content-Type: application/json
 | Field | Type | Description |
 |-------|------|-------------|
 | `access_token` | string | JWT token for API requests (1 hour lifetime) |
-| `refresh_token` | string | Token to obtain new access tokens (30 days lifetime) |
+| `refresh_token` | string | Token to obtain new access tokens (7 days lifetime) |
 | `token_type` | string | Always `Bearer` |
 | `expires_in` | integer | Access token lifetime in seconds (3600) |
-| `refresh_expires_in` | integer | Refresh token lifetime in seconds (2592000) |
+| `refresh_expires_in` | integer | Refresh token lifetime in seconds (604800) |
 | `scope` | string | Space-separated list of authorized scopes |
 
 **Error Responses:**

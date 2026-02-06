@@ -17,7 +17,7 @@ class TestOrgHistoricalAggregatesEndpoint:
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
         # Mock historical data retrieval
-        historical_date = "20260125"
+        historical_date = "2026-01-25"
         with patch('src.domain.services.metering_service.MeteringService') as MockService:
             mock_service = MockService.return_value
             mock_service.get_historical_usage = AsyncMock(return_value={
@@ -54,7 +54,7 @@ class TestOrgHistoricalAggregatesEndpoint:
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
         # Calculate yesterday's date
-        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y%m%d")
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
         with patch('src.domain.services.metering_service.MeteringService') as MockService:
             mock_service = MockService.return_value
@@ -83,10 +83,10 @@ class TestOrgHistoricalAggregatesEndpoint:
 
         # Invalid date formats
         invalid_dates = [
-            "2026-01-25",      # Wrong format (should be YYYYMMDD)
+            "20260125",        # Wrong format (should be YYYY-MM-DD)
             "01/25/2026",      # Wrong format
-            "20261325",        # Invalid month (13)
-            "20260230",        # Invalid day (Feb 30)
+            "2026-13-25",      # Invalid month (13)
+            "2026-02-30",      # Invalid day (Feb 30)
             "invalid",         # Not a date
         ]
 
@@ -107,7 +107,7 @@ class TestOrgHistoricalAggregatesEndpoint:
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
         # Future date (tomorrow)
-        future_date = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y%m%d")
+        future_date = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
 
         response = test_client.get(
             f"/api/v1/orgs/test-org-123/aggregates/{future_date}",
@@ -126,7 +126,7 @@ class TestOrgHistoricalAggregatesEndpoint:
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
         # Date from 2 years ago (likely beyond retention)
-        old_date = (datetime.now(timezone.utc) - timedelta(days=730)).strftime("%Y%m%d")
+        old_date = (datetime.now(timezone.utc) - timedelta(days=730)).strftime("%Y-%m-%d")
 
         with patch('src.domain.services.metering_service.MeteringService') as MockService:
             mock_service = MockService.return_value
@@ -149,7 +149,7 @@ class TestOrgHistoricalAggregatesEndpoint:
         mock_db.get_org_config = AsyncMock(return_value=None)
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
-        historical_date = "20260125"
+        historical_date = "2026-01-25"
         response = test_client.get(
             f"/api/v1/orgs/nonexistent-org/aggregates/{historical_date}",
             headers=auth_headers
@@ -173,7 +173,7 @@ class TestOrgHistoricalAggregatesEndpoint:
         mock_db.is_token_revoked = AsyncMock(return_value=False)
         mock_db.get_org_config = AsyncMock(return_value=mock_org_config)
 
-        historical_date = "20260125"
+        historical_date = "2026-01-25"
         response = test_client.get(
             f"/api/v1/orgs/test-org-123/aggregates/{historical_date}",
             headers=headers
@@ -195,7 +195,7 @@ class TestAppHistoricalAggregatesEndpoint:
         mock_db.get_app_config = AsyncMock(return_value=mock_app_config)
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
-        historical_date = "20260125"
+        historical_date = "2026-01-25"
         with patch('src.domain.services.metering_service.MeteringService') as MockService:
             mock_service = MockService.return_value
             mock_service.get_historical_usage = AsyncMock(return_value={
@@ -247,7 +247,7 @@ class TestAppHistoricalAggregatesEndpoint:
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
         # Future date
-        future_date = (datetime.now(timezone.utc) + timedelta(days=5)).strftime("%Y%m%d")
+        future_date = (datetime.now(timezone.utc) + timedelta(days=5)).strftime("%Y-%m-%d")
 
         response = test_client.get(
             f"/api/v1/orgs/test-org-123/apps/test-app/aggregates/{future_date}",
@@ -266,7 +266,7 @@ class TestAppHistoricalAggregatesEndpoint:
         mock_db.get_app_config = AsyncMock(return_value=mock_app_config)
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
-        historical_date = "20260120"
+        historical_date = "2026-01-20"
         with patch('src.domain.services.metering_service.MeteringService') as MockService:
             mock_service = MockService.return_value
             # No data for this date
@@ -287,7 +287,7 @@ class TestAppHistoricalAggregatesEndpoint:
         mock_db.get_org_config = AsyncMock(return_value=None)
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
-        historical_date = "20260125"
+        historical_date = "2026-01-25"
         response = test_client.get(
             f"/api/v1/orgs/test-org-123/apps/test-app/aggregates/{historical_date}",
             headers=auth_headers
@@ -304,7 +304,7 @@ class TestAppHistoricalAggregatesEndpoint:
         mock_db.get_app_config = AsyncMock(return_value=None)
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
-        historical_date = "20260125"
+        historical_date = "2026-01-25"
         response = test_client.get(
             f"/api/v1/orgs/test-org-123/apps/nonexistent-app/aggregates/{historical_date}",
             headers=auth_headers
@@ -324,7 +324,7 @@ class TestAppHistoricalAggregatesEndpoint:
 
         # Test last 7 days
         for days_ago in range(1, 8):
-            historical_date = (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y%m%d")
+            historical_date = (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y-%m-%d")
 
             with patch('src.domain.services.metering_service.MeteringService') as MockService:
                 mock_service = MockService.return_value
@@ -361,7 +361,7 @@ class TestAppHistoricalAggregatesEndpoint:
         mock_db.get_org_config = AsyncMock(return_value=mock_org_config)
         mock_db.get_app_config = AsyncMock(return_value=mock_app_config)
 
-        historical_date = "20260125"
+        historical_date = "2026-01-25"
         response = test_client.get(
             f"/api/v1/orgs/test-org-123/apps/test-app/aggregates/{historical_date}",
             headers=headers
@@ -374,13 +374,13 @@ class TestAppHistoricalAggregatesEndpoint:
         self, test_client, mock_db, auth_headers,
         mock_org_config, mock_app_config
     ):
-        """Test strict date format validation (YYYYMMDD)."""
+        """Test strict date format validation (YYYY-MM-DD)."""
         mock_db.get_org_config = AsyncMock(return_value=mock_org_config)
         mock_db.get_app_config = AsyncMock(return_value=mock_app_config)
         mock_db.is_token_revoked = AsyncMock(return_value=False)
 
         # Valid format
-        valid_date = "20260125"
+        valid_date = "2026-01-25"
         with patch('src.domain.services.metering_service.MeteringService') as MockService:
             mock_service = MockService.return_value
             mock_service.get_historical_usage = AsyncMock(return_value={
@@ -395,7 +395,7 @@ class TestAppHistoricalAggregatesEndpoint:
             assert response.status_code == 200
 
         # Invalid formats should all fail
-        invalid_formats = ["2026-01-25", "01-25-2026", "26012026"]
+        invalid_formats = ["20260125", "01-25-2026", "26012026"]
         for invalid in invalid_formats:
             response = test_client.get(
                 f"/api/v1/orgs/test-org-123/apps/test-app/aggregates/{invalid}",

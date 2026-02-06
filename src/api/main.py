@@ -46,7 +46,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure properly for production
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -95,18 +95,42 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 # Health check endpoint
-@app.get("/health")
+@app.get("/health", status_code=200)
 async def health_check():
     """Health check endpoint."""
-    db_healthy = await dependencies.db_bridge.health_check() if dependencies.db_bridge else False
+    import time
+    from fastapi.responses import JSONResponse
 
-    return {
-        "status": "healthy" if db_healthy else "unhealthy",
+    # Measure database latency
+    db_start = time.time()
+    db_healthy = await dependencies.db_bridge.health_check() if dependencies.db_bridge else False
+    db_latency_ms = int((time.time() - db_start) * 1000)
+
+    # Build database status object
+    if db_healthy:
+        database_status = {
+            "status": "connected",
+            "latency_ms": db_latency_ms
+        }
+        overall_status = "healthy"
+        status_code = 200
+    else:
+        database_status = {
+            "status": "disconnected",
+            "error": "Health check failed"
+        }
+        overall_status = "unhealthy"
+        status_code = 503
+
+    response = {
+        "status": overall_status,
         "service": settings.app_name,
         "version": settings.version,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "database": "connected" if db_healthy else "disconnected"
+        "database": database_status
     }
+
+    return JSONResponse(content=response, status_code=status_code)
 
 
 # Include routers

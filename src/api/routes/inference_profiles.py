@@ -1,10 +1,14 @@
 """API routes for managing AWS Bedrock inference profiles."""
+import logging
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from ..models.requests import InferenceProfileRegistrationRequest
 from ..models.responses import InferenceProfileResponse
 from ..dependencies import get_inference_profile_service, verify_jwt_token
 from ...domain.services.inference_profile_service import InferenceProfileService
+from ...core.exceptions import InvalidRequestException, InternalServerErrorException
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/orgs/{org_id}/apps/{app_id}/inference-profiles",
@@ -46,15 +50,10 @@ async def register_inference_profile(
         )
         return InferenceProfileResponse(**result)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise InvalidRequestException(str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to register inference profile: {str(e)}"
-        )
+        logger.error(f"Failed to register inference profile: {e}", exc_info=True)
+        raise InternalServerErrorException("Failed to register inference profile")
 
 
 @router.get(
@@ -90,10 +89,8 @@ async def list_inference_profiles(
 
         return results
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list inference profiles: {str(e)}"
-        )
+        logger.error(f"Failed to list inference profiles: {e}", exc_info=True)
+        raise InternalServerErrorException("Failed to list inference profiles")
 
 
 @router.get(
@@ -130,7 +127,5 @@ async def get_inference_profile(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get inference profile: {str(e)}"
-        )
+        logger.error(f"Failed to get inference profile: {e}", exc_info=True)
+        raise InternalServerErrorException("Failed to get inference profile")
